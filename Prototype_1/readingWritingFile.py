@@ -15,7 +15,6 @@ class GrammarParser:
         self.parse_grammar()
 
     def parse_grammar(self):
-        # Split grammar into rules
         rule_strings = [r.strip() for r in self.grammar.split(';') if r.strip()]
         
         for rule_str in rule_strings:
@@ -25,10 +24,8 @@ class GrammarParser:
             name, definition = rule_str.split('=', 1)
             name = name.strip()
             
-            # First tokenize the entire definition
             tokens = re.findall(r'"[^"]*"|\{[^}]*\}|\([^)]*\)|\w+|[,|]', definition.strip())
             
-            # Process tokens to build alternatives
             alternatives = []
             current_sequence = []
             nesting_level = 0
@@ -36,26 +33,22 @@ class GrammarParser:
             for token in tokens:
                 token = token.strip()
                 
-                # Track nesting level for groups and repetitions
                 if token.startswith('{') or token.startswith('('):
                     nesting_level += 1
                 elif token.endswith('}') or token.endswith(')'):
                     nesting_level -= 1
                 
-                # Only split on | when not nested
                 if token == '|' and nesting_level == 0:
                     if current_sequence:
                         alternatives.append(current_sequence)
                     current_sequence = []
                     continue
                 
-                # Handle quoted terminals
                 if token.startswith('"') and token.endswith('"'):
                     terminal = token[1:-1]
                     current_sequence.append({'type': 'terminal', 'value': terminal})
                     self.terminals.add(terminal)
                 
-                # Handle repetition blocks
                 elif token.startswith('{') and token.endswith('}'):
                     inner_content = token[1:-1].strip()
                     inner_tokens = re.findall(r'"[^"]*"|\([^)]*\)|\w+|[,]', inner_content)
@@ -67,7 +60,6 @@ class GrammarParser:
                             continue
                             
                         if inner_token.startswith('('):
-                            # Handle grouped alternatives within repetition
                             group_content = inner_token[1:-1].strip()
                             group_alternatives = []
                             for group_part in group_content.split('|'):
@@ -88,7 +80,6 @@ class GrammarParser:
                     
                     current_sequence.append({'type': 'repetition', 'value': inner_sequence})
                 
-                # Handle groups
                 elif token.startswith('(') and token.endswith(')'):
                     group_content = token[1:-1].strip()
                     group_alternatives = []
@@ -102,11 +93,9 @@ class GrammarParser:
                             group_alternatives.append({'type': 'nonterminal', 'value': part})
                     current_sequence.append({'type': 'group', 'value': group_alternatives})
                 
-                # Handle non-terminals
                 elif token.isalpha():
                     current_sequence.append({'type': 'nonterminal', 'value': token})
             
-            # Add the last sequence if it exists
             if current_sequence:
                 alternatives.append(current_sequence)
             
@@ -123,7 +112,6 @@ class ParserGenerator:
         method_code += "        start_pos = self.pos\n"
         method_code += "        self.skip_whitespace()\n\n"
         
-        # Handle alternatives
         alternatives = []
         for sequence in rule.alternatives:
             seq_parts = []
@@ -136,12 +124,10 @@ class ParserGenerator:
                     seq_parts.append(f'self.parse_{item["value"]}()')
                 
                 elif item['type'] == 'repetition':
-                    # Handle initial sequence
                     if seq_parts:
                         initial_sequence = ' and '.join(seq_parts)
                         seq_parts = [initial_sequence]
                     
-                    # Build the repeated sequence
                     rep_parts = []
                     for rep_item in item['value']:
                         if rep_item['type'] == 'terminal':
@@ -160,7 +146,6 @@ class ParserGenerator:
                     
                     if rep_parts:
                         rep_sequence = ' and '.join(rep_parts)
-                        # Add simple repetition that matches 0 or more times
                         seq_parts.append("self._repeat_parse(lambda: " + rep_sequence + ")")
                 
                 elif item['type'] == 'group':
@@ -229,7 +214,6 @@ class GeneratedParser:
         return self.parse_expr()  # Start with first rule
 """
         
-        # Add methods for each rule
         first_rule = next(iter(self.rules.keys()))
         code = code.replace("parse_expr()", f"parse_{first_rule}()")
         
@@ -239,7 +223,6 @@ class GeneratedParser:
         return code
 
 def main():
-    # Arithmetic Grammar
     arithmetic_grammar = """
     expr = term , { ("+" | "-") , term } ;
     term = factor , { ("*" | "/") , factor } ;
@@ -248,7 +231,6 @@ def main():
     digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
     """
 
-    # Sentence Grammar
     sentence_grammar = """
     sentence = subject , verb , object ;
     subject = article , noun ;
@@ -258,11 +240,10 @@ def main():
     verb = "chases" | "catches" | "watches" ;
     """
 
-    # Generate arithmetic parser
+
     print("Generating arithmetic parser...")
     arithmetic_generator = ParserGenerator(arithmetic_grammar)
     arithmetic_parser_code = arithmetic_generator.generate_parser()
-    # Add this after creating the arithmetic_generator
     print("\nDebugging Grammar Parsing:")
     for rule_name, rule in arithmetic_generator.rules.items():
         print(f"\nRule: {rule_name}")
@@ -272,7 +253,6 @@ def main():
     with open('arithmetic_parser.py', 'w') as f:
         f.write(arithmetic_parser_code)
 
-    # Generate sentence parser
     print("Generating sentence parser...")
     sentence_generator = ParserGenerator(sentence_grammar)
     sentence_parser_code = sentence_generator.generate_parser()
@@ -280,7 +260,6 @@ def main():
     with open('sentence_parser.py', 'w') as f:
         f.write(sentence_parser_code)
 
-    # Test both parsers
     print("\nTesting arithmetic parser...")
     exec(arithmetic_parser_code)
     test_expressions = [
@@ -291,6 +270,7 @@ def main():
         "1+2+3",
         "1*2*3",
         "1+(2*3)"]
+    
     
     for expr in test_expressions:
         arithmetic_parser = locals()['GeneratedParser'](expr)
@@ -311,6 +291,8 @@ def main():
             print(f"Valid sentence: {sentence}")
         except SyntaxError as e:
             print(f"Invalid sentence: {sentence} - {e}")
+
+
 
 if __name__ == "__main__":
     main()
