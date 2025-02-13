@@ -19,7 +19,7 @@ class Square {
    }
 
    /** Disposes this square. */
-   method void () {
+   method void test() {
       do Memory.deAlloc(this);
       return;
    }

@@ -95,14 +95,14 @@ class GrammarLexer:
     def terminal(self) -> Token:
         result = ''
         start_col = self.col
-        self.advance()  # Skip opening quote
+        self.advance()
         
         while self.current_char and self.current_char != '"':
             result += self.current_char
             self.advance()
             
         if self.current_char == '"':
-            self.advance()  # Skip closing quote
+            self.advance()
             return Token(TokenType.TERMINAL, result, self.line, start_col)
         else:
             raise Exception(f'Unterminated string at line {self.line}, column {start_col}')
@@ -119,7 +119,6 @@ class GrammarLexer:
             if self.current_char == '"':
                 return self.terminal()
 
-            # Single character tokens
             char_to_token = {
                 '=': TokenType.EQUALS,
                 ';': TokenType.SEMICOLON,
@@ -234,46 +233,3 @@ class GrammarParser:
             
         else:
             self.error('term')
-
-def main():
-    # Example grammar
-    grammar = """
-    expr = term , { ("+" | "-") , term } ;
-    term = factor , { ("*" | "/") , factor } ;
-    factor = number | "(" , expr , ")" ;
-    number = digit , { digit } ;
-    digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
-    """
-
-    parser = GrammarParser(grammar)
-    ast = parser.parse_grammar()
-
-    # Print the AST structure
-    def print_ast(node, indent=""):
-        if isinstance(node, Rule):
-            print(f"{indent}Rule: {node.name}")
-            print_ast(node.definition, indent + "  ")
-        elif isinstance(node, Terminal):
-            print(f"{indent}Terminal: {node.value}")
-        elif isinstance(node, NonTerminal):
-            print(f"{indent}NonTerminal: {node.name}")
-        elif isinstance(node, Sequence):
-            print(f"{indent}Sequence:")
-            for item in node.items:
-                print_ast(item, indent + "  ")
-        elif isinstance(node, Alternative):
-            print(f"{indent}Alternative:")
-            for option in node.options:
-                print_ast(option, indent + "  ")
-        elif isinstance(node, Repetition):
-            print(f"{indent}Repetition:")
-            print_ast(node.item, indent + "  ")
-        elif isinstance(node, Optional):
-            print(f"{indent}Optional:")
-            print_ast(node.item, indent + "  ")
-
-    for rule in ast:
-        print_ast(rule)
-
-if __name__ == "__main__":
-    main()

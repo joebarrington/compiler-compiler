@@ -1,21 +1,66 @@
 from Lexer import StandardLexer, TokenType, Token
+import functools
 
 class GeneratedParser:
     def __init__(self, text: str):
-        self.keywords = {'true', 'int', 'constructor', 'if', 'static', 'void', 'return', 'do', 'this', 'field', 'function', 'boolean', 'class', 'method', 'else', 'char', 'null', 'while', 'var', 'let', 'false'}
-        self.symbols = {'', '=', ')', '*', '<', '.', '~', '-', '&', '+', '{', '>', ']', '(', '/', ',', '[', '|', '}', ';'}
+        self.keywords = {'function', 'this', 'let', 'constructor', 'void', 'while', 'char', 'do', 'class', 'true', 'static', 'int', 'else', 'var', 'return', 'false', 'field', 'boolean', 'null', 'method', 'if'}
+        self.symbols = {'', '<', '-', '(', '[', '>', '~', '=', ',', '/', '.', '*', ')', '{', '+', ';', '}', ']', '&', '|'}
         self.lexer = StandardLexer(text, self.keywords)
         self.current_token = None
         self.next_token()
-        
+        self._memoization_cache = {}
+        self.error_recovery_points = set()  # Store sync points for error recovery
+    
+    @staticmethod
+    def memoize(func):
+        """Decorator for memoizing parser methods"""
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            cache_key = (func.__name__, self.lexer.pos)
+            if cache_key in self._memoization_cache:
+                result, new_pos = self._memoization_cache[cache_key]
+                self.lexer.pos = new_pos
+                return result
+            
+            start_pos = self.lexer.pos
+            result = func(self, *args, **kwargs)
+            self._memoization_cache[cache_key] = (result, self.lexer.pos)
+            return result
+        return wrapper
     def error(self, expected=None):
-        msg = f"Syntax error at line {self.lexer.line}, column {self.lexer.column}"
-        if expected:
-            msg += f". Expected {expected}"
-        if self.current_token:
-            msg += f". Got {self.current_token}"
-        raise SyntaxError(msg)
+        token = self.current_token
+        line = self.lexer.line
+        column = self.lexer.column
         
+        error_context = self._get_error_context()
+        
+        msg = f"Syntax error at line {line}, column {column}\n"
+        msg += f"Got: {token.type}({token.value})\n"
+        if expected:
+            msg += f"Expected: {expected}\n"
+        msg += f"Context:\n{error_context}"
+        
+        if self._try_error_recovery():
+            msg += "\nAttempted error recovery and continued parsing."
+        
+        raise SyntaxError(msg)
+    
+    def _get_error_context(self):
+        lines = self.lexer.text.split('\n')
+        if self.lexer.line <= len(lines):
+            error_line = lines[self.lexer.line - 1]
+            pointer = ' ' * (self.lexer.column - 1) + '^'
+            return f"{error_line}\n{pointer}"
+        return "Context not available"
+        
+    def _try_error_recovery(self):
+        """Attempt to recover from syntax errors by finding synchronization points"""
+        while self.current_token.type != TokenType.EOF:
+            if self.current_token.value in self.error_recovery_points:
+                self.next_token()
+                return True
+            self.next_token()
+        return False
     def next_token(self):
         self.current_token = self.lexer.get_next_token()
         
@@ -39,7 +84,7 @@ class GeneratedParser:
         
     def parse(self):
         if not self.parse_classDeclar():
-            self.error("valid class declaration")
+            self.error("valid classDeclar")
         if self.current_token.type != TokenType.EOF:
             self.error("end of input")
         return True
@@ -52,7 +97,7 @@ class GeneratedParser:
         
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
-
+    @memoize
     def parse_classDeclar(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "class") and self.parse_identifier() and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_memberDeclar()) and self.match(TokenType.SYMBOL, "}"):
@@ -60,6 +105,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_memberDeclar(self):
         pos_start = self.lexer.pos
         if self.parse_classVarDeclar() or self.parse_subroutineDeclar():
@@ -67,6 +113,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_classVarDeclar(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.KEYWORD, "static") or self.match(TokenType.KEYWORD, "field")) and self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
@@ -74,6 +121,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_type(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "int") or self.match(TokenType.KEYWORD, "char") or self.match(TokenType.KEYWORD, "boolean") or self.parse_identifier():
@@ -81,6 +129,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_subroutineDeclar(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.KEYWORD, "constructor") or self.match(TokenType.KEYWORD, "function") or self.match(TokenType.KEYWORD, "method")) and (self.parse_type() or self.match(TokenType.KEYWORD, "void")) and self.parse_identifier() and self.match(TokenType.SYMBOL, "(") and self.parse_paramList() and self.match(TokenType.SYMBOL, ")") and self.parse_subroutineBody():
@@ -88,6 +137,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_paramList(self):
         pos_start = self.lexer.pos
         if (self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_type() and self.parse_identifier()))) or True:
@@ -95,6 +145,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_subroutineBody(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}"):
@@ -102,6 +153,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_statement(self):
         pos_start = self.lexer.pos
         if self.parse_varDeclarStatement() or self.parse_letStatemnt() or self.parse_ifStatement() or self.parse_whileStatement() or self.parse_doStatement() or self.parse_returnStatemnt():
@@ -109,6 +161,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_varDeclarStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "var") and self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
@@ -116,6 +169,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_letStatemnt(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "let") and self.parse_identifier() and ((self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]")) or True) and self.match(TokenType.SYMBOL, "=") and self.parse_expression() and self.match(TokenType.SYMBOL, ";"):
@@ -123,6 +177,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_ifStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "if") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}") and ((self.match(TokenType.KEYWORD, "else") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}")) or True):
@@ -130,6 +185,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_whileStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "while") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}"):
@@ -137,6 +193,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_doStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "do") and self.parse_subroutineCall() and self.match(TokenType.SYMBOL, ";"):
@@ -144,6 +201,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_subroutineCall(self):
         pos_start = self.lexer.pos
         if self.parse_identifier() and ((self.match(TokenType.SYMBOL, ".") and self.parse_identifier()) or True) and self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")"):
@@ -151,6 +209,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_expressionList(self):
         pos_start = self.lexer.pos
         if (self.parse_expression() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_expression()))) or True:
@@ -158,6 +217,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_returnStatemnt(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "return") and (self.parse_expression() or True) and self.match(TokenType.SYMBOL, ";"):
@@ -165,6 +225,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_expression(self):
         pos_start = self.lexer.pos
         if self.parse_relationalExpression() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "&") or self.match(TokenType.SYMBOL, "|")) and self.parse_relationalExpression())):
@@ -172,6 +233,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_relationalExpression(self):
         pos_start = self.lexer.pos
         if self.parse_ArithmeticExpression() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "=") or self.match(TokenType.SYMBOL, ">") or self.match(TokenType.SYMBOL, "<")) and self.parse_ArithmeticExpression())):
@@ -179,6 +241,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_ArithmeticExpression(self):
         pos_start = self.lexer.pos
         if self.parse_term() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "+") or self.match(TokenType.SYMBOL, "-")) and self.parse_term())):
@@ -186,6 +249,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_term(self):
         pos_start = self.lexer.pos
         if self.parse_factor() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "*") or self.match(TokenType.SYMBOL, "/")) and self.parse_factor())):
@@ -193,6 +257,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_factor(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.SYMBOL, "-") or self.match(TokenType.SYMBOL, "~") or True) and self.parse_operand():
@@ -200,183 +265,37 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
+    @memoize
     def parse_operand(self):
         pos_start = self.lexer.pos
         if self.parse_integerConstant() or (self.parse_identifier() and ((self.match(TokenType.SYMBOL, ".") and self.parse_identifier()) or True) and ((self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]")) or True)) or (self.parse_identifier() and ((self.match(TokenType.SYMBOL, ".") and self.parse_identifier()) or True) and self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")")) or (self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")")) or self.parse_stringLiteral() or self.match(TokenType.KEYWORD, "true") or self.match(TokenType.KEYWORD, "false") or self.match(TokenType.KEYWORD, "null") or self.match(TokenType.KEYWORD, "this"):
             return True
         self.lexer.pos = pos_start
         return False
-    
 
 def test_parser(file_path=None):
     if file_path:
         try:
             with open(file_path, 'r') as file:
-                jack_code = file.read()
-            print(f"\nTesting JACK file: {file_path}")
-            parser = GeneratedParser(jack_code)
+                code = file.read()
+            print(f"Testing file: {file_path}")
+            parser = GeneratedParser(code)
             result = parser.parse()
-            print("✓ Successfully parsed JACK file")
+            print("Successfully parsed file")
             return True
         except FileNotFoundError:
-            print(f"✗ File not found: {file_path}")
+            print(f"File not found: {file_path}")
             return False
         except SyntaxError as e:
-            print(f"✗ Syntax error in JACK file: {e}")
+            print(f"Syntax error in file: {e}")
             return False
         except Exception as e:
-            print(f"✗ Error parsing JACK file: {e}")
+            print(f"Error parsing file: {e}")
             return False
 
 if __name__ == "__main__":
-    test_parser("square.jack")
-
-# def test_parser():
-#     test_cases = [
-#         {
-#             "name": "Basic class with field",
-#             "code": """
-# class Simple {
-#     field int x;
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "Class with method",
-#             "code": """
-# class WithMethod {
-#     method void doSomething() {
-#         return;
-#     }
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "Class with constructor",
-#             "code": """
-# class WithConstructor {
-#     constructor WithConstructor new() {
-#         return this;
-#     }
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "Complex class",
-#             "code": """
-# class Complex {
-#     field int x, y;
-#     static boolean flag;
-    
-#     constructor Complex new() {
-#         let x = 0;
-#         let y = 0;
-#         let flag = true;
-#         return this;
-#     }
-    
-#     method void setX(int val) {
-#         let x = val;
-#         return;
-#     }
-    
-#     method int getX() {
-#         return x;
-#     }
-    
-#     method void compute() {
-#         var int temp;
-#         let temp = x * y;
-#         if (temp < 100) {
-#             let x = x + 1;
-#         } else {
-#             let y = y + 1;
-#         }
-#         return;
-#     }
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "Missing closing brace",
-#             "code": """
-# class Error {
-#     field int x;
-    
-#     method void test() {
-#         return;
-    
-# """,
-#             "should_pass": False
-#         },
-#         {
-#             "name": "Array manipulation",
-#             "code": """
-# class Array {
-#     field int numbers;
-    
-#     method void set(int index, int value) {
-#         let numbers[index] = value;
-#         return;
-#     }
-    
-#     method int get(int index) {
-#         return numbers[index];
-#     }
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "While loop and expressions",
-#             "code": """
-# class Loops {
-#     method void count() {
-#         var int i;
-#         let i = 0;
-#         while (i < 10) {
-#             let i = i + 1;
-#         }
-#         return;
-#     }
-# }""",
-#             "should_pass": True
-#         },
-#         {
-#             "name": "Do statement and subroutine calls",
-#             "code": """
-# class Calls {
-#     method void test() {
-#         do Output.printInt(42);
-#         do move.left();
-#         return;
-#     }
-# }""",
-#             "should_pass": True
-#         }
-#     ]
-    
-#     total_tests = len(test_cases)
-#     passed_tests = 0
-    
-#     for test in test_cases:
-#         print(f"\nRunning test: {test['name']}")
-#         try:
-#             parser = GeneratedParser(test["code"])
-#             result = parser.parse()
-#             if test["should_pass"]:
-#                 print("✓ Test passed as expected")
-#                 passed_tests += 1
-#             else:
-#                 print("✗ Test unexpectedly passed")
-#         except SyntaxError as e:
-#             if not test["should_pass"]:
-#                 print("✓ Test failed as expected")
-#                 passed_tests += 1
-#             else:
-#                 print(f"✗ Test unexpectedly failed: {e}")
-    
-#     print(f"\nTest Results: {passed_tests}/{total_tests} tests passed")
-#     return passed_tests == total_tests
-
-# if __name__ == "__main__":
-#     test_parser()
+    import sys
+    if len(sys.argv) > 1:
+        test_parser(sys.argv[1])
+    else:
+        print("Please provide a file path as an argument")
