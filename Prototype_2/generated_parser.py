@@ -3,8 +3,8 @@ import functools
 
 class GeneratedParser:
     def __init__(self, text: str):
-        self.keywords = {'function', 'this', 'let', 'constructor', 'void', 'while', 'char', 'do', 'class', 'true', 'static', 'int', 'else', 'var', 'return', 'false', 'field', 'boolean', 'null', 'method', 'if'}
-        self.symbols = {'', '<', '-', '(', '[', '>', '~', '=', ',', '/', '.', '*', ')', '{', '+', ';', '}', ']', '&', '|'}
+        self.keywords = {'false', 'field', 'class', 'else', 'function', 'while', 'static', 'this', 'null', 'var', 'boolean', 'if', 'let', 'char', 'constructor', 'int', 'return', 'do', 'method', 'true', 'void'}
+        self.symbols = {'', ')', '}', ';', '>', '[', '/', '(', ',', ']', '|', '&', '~', '-', '.', '=', '{', '<', '+', '*'}
         self.lexer = StandardLexer(text, self.keywords)
         self.current_token = None
         self.next_token()
