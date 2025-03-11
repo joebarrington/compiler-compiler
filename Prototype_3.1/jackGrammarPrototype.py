@@ -308,235 +308,23 @@ def main():
     #             stringLiteral |
     #             "true" | "false" | "null" | "this" ;
     # """
-    C_GRAMMAR = """
-translationunit = { externaldeclaration } ;
+    JSON_GRAMMAR = """
+    json = object | array ;
+    
+    object = "{" , [ pair , { "," , pair } ] , "}" ;
+    pair = string , ":" , value ;
 
-externaldeclaration = functiondefinition 
-                   | declaration ;
+    array = "[" , [ value , { "," , value } ] , "]" ;
 
-functiondefinition = { declarationspecifier } , declarator , { declaration } , compoundstatement ;
+    value = string | number | object | array | "true" | "false" | "null" ;
 
-declarationspecifier = storageclassspecifier 
-                    | typespecifier 
-                    | typequalifier ;
+    string =  { "TEXT" } ;
+    number = [ "-" ] , digits , [ "." , digits ] , [ ("e" | "E") , [ "+" | "-" ] , digits ] ;
 
-storageclassspecifier = "auto" 
-                     | "register" 
-                     | "static" 
-                     | "extern" 
-                     | "typedef" ;
-
-typespecifier = "void" 
-              | "char" 
-              | "short" 
-              | "int" 
-              | "long" 
-              | "float" 
-              | "double" 
-              | "signed" 
-              | "unsigned" 
-              | structorunionspecifier 
-              | enumspecifier 
-              | typedefname ;
-
-structorunionspecifier = structorunion , identifier , "{" , { structdeclaration } , "}" 
-                      | structorunion , "{" , { structdeclaration } , "}" 
-                      | structorunion , identifier ;
-
-structorunion = "struct" | "union" ;
-
-structdeclaration = { specifierqualifier } , structdeclaratorlist ;
-
-specifierqualifier = typespecifier 
-                  | typequalifier ;
-
-structdeclaratorlist = structdeclarator 
-                    | structdeclaratorlist , "," , structdeclarator ;
-
-structdeclarator = declarator 
-                | declarator , ":" , constantexpression 
-                | ":" , constantexpression ;
-
-declarator = [ pointer ] , directdeclarator ;
-
-pointer = "*" , { typequalifier } , [ pointer ] ;
-
-typequalifier = "const" | "volatile" ;
-
-directdeclarator = identifier 
-                | "(" , declarator , ")" 
-                | directdeclarator , "[" , [ constantexpression ] , "]" 
-                | directdeclarator , "(" , parametertypelist , ")" 
-                | directdeclarator , "(" , { identifier } , ")" ;
-
-constantexpression = conditionalexpression ;
-
-conditionalexpression = logicalorexpression 
-                     | logicalorexpression , "?" , expression , ":" , conditionalexpression ;
-
-logicalorexpression = logicalandexpression 
-                   | logicalorexpression , "||" , logicalandexpression ;
-
-logicalandexpression = inclusiveorexpression 
-                    | logicalandexpression , "&&" , inclusiveorexpression ;
-
-inclusiveorexpression = exclusiveorexpression 
-                     | inclusiveorexpression , "|" , exclusiveorexpression ;
-
-exclusiveorexpression = andexpression 
-                     | exclusiveorexpression , "^" , andexpression ;
-
-andexpression = equalityexpression 
-              | andexpression , "&" , equalityexpression ;
-
-equalityexpression = relationalexpression 
-                  | equalityexpression , "==" , relationalexpression 
-                  | equalityexpression , "!=" , relationalexpression ;
-
-relationalexpression = shiftexpression 
-                    | relationalexpression , "<" , shiftexpression 
-                    | relationalexpression , ">" , shiftexpression 
-                    | relationalexpression , "<=" , shiftexpression 
-                    | relationalexpression , ">=" , shiftexpression ;
-
-shiftexpression = additiveexpression 
-                | shiftexpression , "<<" , additiveexpression 
-                | shiftexpression , ">>" , additiveexpression ;
-
-additiveexpression = multiplicativeexpression 
-                  | additiveexpression , "+" , multiplicativeexpression 
-                  | additiveexpression , "-" , multiplicativeexpression ;
-
-multiplicativeexpression = castexpression 
-                       | multiplicativeexpression , "*" , castexpression 
-                       | multiplicativeexpression , "/" , castexpression 
-                       | multiplicativeexpression , "%" , castexpression ;
-
-castexpression = unaryexpression 
-               | "(" , typename , ")" , castexpression ;
-
-unaryexpression = postfixexpression 
-                | "++" , unaryexpression 
-                | "--" , unaryexpression 
-                | unaryoperator , castexpression 
-                | "sizeof" , unaryexpression 
-                | "sizeof" , typename ;
-
-postfixexpression = primaryexpression 
-                  | postfixexpression , "[" , expression , "]" 
-                  | postfixexpression , "(" , { assignmentexpression } , ")" 
-                  | postfixexpression , "." , identifier 
-                  | postfixexpression , "->" , identifier 
-                  | postfixexpression , "++" 
-                  | postfixexpression , "--" ;
-
-primaryexpression = identifier 
-                 | constant 
-                 | string 
-                 | "(" , expression , ")" ;
-
-constant = integerconstant 
-         | characterconstant 
-         | floatingconstant 
-         | enumerationconstant ;
-
-expression = assignmentexpression 
-          | expression , "," , assignmentexpression ;
-
-assignmentexpression = conditionalexpression 
-                    | unaryexpression , assignmentoperator , assignmentexpression ;
-
-assignmentoperator = "=" 
-                  | "*=" 
-                  | "/=" 
-                  | "%=" 
-                  | "+=" 
-                  | "-=" 
-                  | "<<=" 
-                  | ">>=" 
-                  | "&=" 
-                  | "^=" 
-                  | "|=" ;
-
-unaryoperator = "&" 
-              | "*" 
-              | "+" 
-              | "-" 
-              | "~" 
-              | "!" ;
-
-typename = { specifierqualifier } , [ abstractdeclarator ] ;
-
-parametertypelist = parameterlist 
-                 | parameterlist , "," , "..." ;
-
-parameterlist = parameterdeclaration 
-              | parameterlist , "," , parameterdeclaration ;
-
-parameterdeclaration = { declarationspecifier } , declarator 
-                    | { declarationspecifier } , abstractdeclarator 
-                    | { declarationspecifier } ;
-
-abstractdeclarator = pointer 
-                  | pointer , directabstractdeclarator 
-                  | directabstractdeclarator ;
-
-directabstractdeclarator = "(" , abstractdeclarator , ")" 
-                        | [ directabstractdeclarator ] , "[" , [ constantexpression ] , "]" 
-                        | [ directabstractdeclarator ] , "(" , [ parametertypelist ] , ")" ;
-
-enumspecifier = "enum" , identifier , "{" , enumeratorlist , "}" 
-              | "enum" , "{" , enumeratorlist , "}" 
-              | "enum" , identifier ;
-
-enumeratorlist = enumerator 
-               | enumeratorlist , "," , enumerator ;
-
-enumerator = identifier 
-           | identifier , "=" , constantexpression ;
-
-typedefname = identifier ;
-
-declaration = { declarationspecifier } , { initdeclarator } , ";" ;
-
-initdeclarator = declarator 
-               | declarator , "=" , initializer ;
-
-initializer = assignmentexpression 
-            | "{" , initializerlist , "}" 
-            | "{" , initializerlist , "," , "}" ;
-
-initializerlist = initializer 
-                | initializerlist , "," , initializer ;
-
-compoundstatement = "{" , { declaration } , { statement } , "}" ;
-
-statement = labeledstatement 
-         | expressionstatement 
-         | compoundstatement 
-         | selectionstatement 
-         | iterationstatement 
-         | jumpstatement ;
-
-labeledstatement = identifier , ":" , statement 
-                | "case" , constantexpression , ":" , statement 
-                | "default" , ":" , statement ;
-
-expressionstatement = [ expression ] , ";" ;
-
-selectionstatement = "if" , "(" , expression , ")" , statement 
-                   | "if" , "(" , expression , ")" , statement , "else" , statement 
-                   | "switch" , "(" , expression , ")" , statement ;
-
-iterationstatement = "while" , "(" , expression , ")" , statement 
-                   | "do" , statement , "while" , "(" , expression , ")" , ";" 
-                   | "for" , "(" , [ expression ] , ";" , [ expression ] , ";" , [ expression ] , ")" , statement ;
-
-jumpstatement = "goto" , identifier , ";" 
-              | "continue" , ";" 
-              | "break" , ";" 
-              | "return" , [ expression ] , ";" ;
+    digits = digit , { digit } ;
+    digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
 """
+
     jack_config = {
         'special_tokens': {
             'identifier': ('IDENTIFIER', 'parse_identifier'),
@@ -547,7 +335,7 @@ jumpstatement = "goto" , identifier , ";"
         'symbol_type': 'SYMBOL'
     }
     
-    generator = ParserGenerator(C_GRAMMAR, jack_config)
+    generator = ParserGenerator(JSON_GRAMMAR, jack_config)
     parser_code = generator.generate_parser_code()
     
     with open('generated_parser.py', 'w') as f:
