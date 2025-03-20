@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass
 
 class TokenType:
@@ -105,23 +106,19 @@ class StandardLexer:
 
     def get_next_token(self):
         while self.current_char:
-            print(f"Processing character: '{self.current_char}' at position {self.pos}, line {self.line}, column {self.column}")
             if self.current_char.isspace():
                 self.skip_whitespace()
                 continue
 
             if self.current_char == '/':
-                # Store current position for potential token creation
                 current_column = self.column
                 
-                # Check for comments
                 if self.peek() in ['/', '*']:
                     self.skip_comment()
                     continue
                 else:
-                    # It's a division operator, create token and advance
                     symbol = self.current_char
-                    self.advance()  # Advance past the '/' character
+                    self.advance()
                     return Token(TokenType.SYMBOL, symbol, self.line, current_column)
 
             if self.current_char.isalpha() or self.current_char == '_':
@@ -143,32 +140,3 @@ class StandardLexer:
 
         return Token(TokenType.EOF, '', self.line, self.column)
 
-def example():
-    jack_keywords = {
-        'class', 'constructor', 'function', 'method', 'field', 'static',
-        'var', 'int', 'char', 'boolean', 'void', 'true', 'false', 'null',
-        'this', 'let', 'do', 'if', 'else', 'while', 'return'
-    }
-    
-    code = '''
-    class Example {
-        field int x;
-        
-        method void test() {
-            var int temp;
-            let temp = 42;
-            return;
-        }
-    }
-    '''
-    
-    lexer = StandardLexer(code, jack_keywords)
-    
-    while True:
-        token = lexer.get_next_token()
-        print(f"Token: {token}")
-        if token.type == TokenType.EOF:
-            break
-
-if __name__ == "__main__":
-    example()

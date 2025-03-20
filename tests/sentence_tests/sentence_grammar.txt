@@ -1,0 +1,6 @@
+sentence = subject , verb , object ;
+subject = article , noun ;
+object = article , noun ;
+article = "the" | "a" ;
+noun = "cat" | "dog" | "bird" ;
+verb = "chases" | "catches" | "watches" ;

@@ -1,6 +1,8 @@
-from GrammarParser import GrammarParser, Terminal, NonTerminal, Sequence, Alternative, Repetition, Optional, Rule
+from grammar_parser import GrammarParser, Terminal, NonTerminal, Sequence, Alternative, Repetition, Optional, Rule
 from typing import Dict, Set, List, Tuple, Optional as OptionalType
 from dataclasses import dataclass
+from lexer_generator import lexer_code
+import os
 
 @dataclass
 class TokenConfig:
@@ -9,7 +11,7 @@ class TokenConfig:
     parser_method: str
 
 class ParserGenerator:
-    def __init__(self, grammar: str, token_config: Dict[str, Tuple[str, str]] = None):
+    def __init__(self, grammar: str, token_config: Dict[str, Dict[str, Tuple[str, str]]] = None):
         parser = GrammarParser(grammar)
         self.ast = parser.parse_grammar()
         self.keywords: Set[str] = set()
@@ -25,18 +27,106 @@ class ParserGenerator:
             'symbol_type': 'SYMBOL'
         } if token_config is None else token_config
 
+        # Before we collect terminals, preprocess grammar to replace number/digit rules with integerConstant
+        self._preprocess_grammar()
+        
         self.precedence_rules = self._generate_precedence_rules(self.ast)
         self._collect_terminals()
 
+    def _preprocess_grammar(self):
+        """
+        Preprocess the grammar to detect and handle number/digit patterns,
+        replacing them with integerConstant where appropriate
+        """
+        # First identify if we have number and digit rules
+        number_rule = None
+        digit_rule = None
+        
+        for rule in self.ast:
+            if rule.name == 'number':
+                number_rule = rule
+            elif rule.name == 'digit':
+                digit_rule = rule
+                
+        # If we have both number and digit rules, check their pattern
+        if number_rule and digit_rule:
+            # Check if number rule matches the pattern: digit, {digit}
+            if self._is_digit_sequence_pattern(number_rule, digit_rule):
+                # Find all references to 'number' and replace with 'integerConstant'
+                self._replace_number_with_integer_constant()
+                
+    def _is_digit_sequence_pattern(self, number_rule, digit_rule):
+        """Check if number rule follows the pattern: digit, {digit}"""
+        try:
+            # Check if number_rule definition is a sequence
+            if isinstance(number_rule.definition, Sequence):
+                items = number_rule.definition.items
+                # Check if first item is a reference to digit
+                if len(items) >= 1 and isinstance(items[0], NonTerminal) and items[0].name == 'digit':
+                    # Check if second item is a repetition of digit (if it exists)
+                    if len(items) >= 2:
+                        return (isinstance(items[1], Repetition) and 
+                                isinstance(items[1].item, NonTerminal) and 
+                                items[1].item.name == 'digit')
+                    return True  # Just a single digit is also fine
+            return False
+        except:
+            return False  # If any exception occurs, just return False
+            
+    def _replace_number_with_integer_constant(self):
+        """Replace all references to 'number' with 'integerConstant'"""
+        # We'll modify rules that reference 'number'
+        for rule in self.ast:
+            self._replace_number_in_node(rule.definition)
+            
+    def _replace_number_in_node(self, node):
+        """Recursively replace NonTerminal('number') with Terminal('integerConstant')"""
+        if isinstance(node, NonTerminal) and node.name == 'number':
+            # This is a direct replacement - may need to preserve attributes
+            node.name = 'integerConstant'
+            # Convert NonTerminal to Terminal
+            return Terminal('integerConstant')
+            
+        # Recursively process other node types
+        elif isinstance(node, Sequence):
+            for i, item in enumerate(node.items):
+                replacement = self._replace_number_in_node(item)
+                if replacement:
+                    node.items[i] = replacement
+        elif isinstance(node, Alternative):
+            for i, option in enumerate(node.options):
+                replacement = self._replace_number_in_node(option)
+                if replacement:
+                    node.options[i] = replacement
+        elif isinstance(node, Repetition):
+            replacement = self._replace_number_in_node(node.item)
+            if replacement:
+                node.item = replacement
+        elif isinstance(node, Optional):
+            replacement = self._replace_number_in_node(node.item)
+            if replacement:
+                node.item = replacement
+                
+        return None  # No replacement needed
+
     def _collect_terminals(self):
+        """Collect all terminal symbols and keywords from the grammar"""
         def visit(node):
             if isinstance(node, Terminal):
+                # Check if the terminal is a special token
+                special_tokens = self.token_config.get('special_tokens', {}).keys()
+                if node.value in special_tokens:
+                    return  # Skip adding special tokens to keywords or symbols
+                
+                # Add normal terminals appropriately
                 if node.value.isalpha():
                     self.keywords.add(node.value)
                 else:
-                    self.symbols.add(node.value)
+                    # Don't add digit characters as symbols
+                    if not node.value.isdigit():
+                        self.symbols.add(node.value)
             elif isinstance(node, (Sequence, Alternative)):
-                for child in (node.items if isinstance(node, Sequence) else node.options):
+                for child in node.items if isinstance(node, Sequence) else node.options:
                     visit(child)
             elif isinstance(node, (Repetition, Optional)):
                 visit(node.item)
@@ -86,6 +176,10 @@ class ParserGenerator:
                 return f'self.match(TokenType.{self.token_config["symbol_type"]}, "{node.value}")'
                 
         elif isinstance(node, NonTerminal):
+            # Handle any NonTerminal that was changed to 'integerConstant' but not yet converted to Terminal
+            if node.name == 'integerConstant':
+                token_type, parser_method = self.token_config['special_tokens']['integerConstant']
+                return f'self.{parser_method}()'
             return f'self.parse_{node.name}()'
             
         elif isinstance(node, Sequence):
@@ -122,7 +216,7 @@ class ParserGenerator:
             raise Exception(f'Unknown node type: {type(node)}')
 
     def _generate_parser_header(self) -> str:
-        return f'''from Lexer import StandardLexer, TokenType, Token
+        return f'''from generated_parser.Lexer import StandardLexer, TokenType, Token
 import functools
 
 class GeneratedParser:
@@ -235,7 +329,18 @@ class GeneratedParser:
         
         parser_code += self._generate_parser_methods()
 
+        # Skip generating code for 'digit' rule if we've converted number to integerConstant
+        skip_rules = set()
+        if any(rule.name == 'integerConstant' for rule in self.ast) or any(
+            isinstance(node, NonTerminal) and node.name == 'integerConstant' 
+            for rule in self.ast 
+            for node in self._get_all_nodes(rule.definition)):
+            skip_rules.add('digit')
+            
         for rule in self.ast:
+            if rule.name in skip_rules:
+                continue
+                
             method = f'''
     @memoize
     def parse_{rule.name}(self):
@@ -277,39 +382,21 @@ if __name__ == "__main__":
 '''
     
         return parser_code
+        
+    def _get_all_nodes(self, node):
+        """Helper to get all nodes recursively from a grammar node"""
+        nodes = [node]
+        if isinstance(node, (Sequence, Alternative)):
+            for child in node.items if isinstance(node, Sequence) else node.options:
+                nodes.extend(self._get_all_nodes(child))
+        elif isinstance(node, (Repetition, Optional)):
+            nodes.extend(self._get_all_nodes(node.item))
+        return nodes
 
 def main():
-    JACK_GRAMMAR = """
-        classDeclar = "class" , identifier , "{" , { memberDeclar } , "}" ;
-        memberDeclar = classVarDeclar | subroutineDeclar ;
-        classVarDeclar = ("static" | "field") , type , identifier , { "," , identifier } , ";" ;
-        type = "int" | "char" | "boolean" | identifier ;
-        subroutineDeclar = ("constructor" | "function" | "method") , (type | "void") , identifier , "(" , paramList , ")" , subroutineBody ;
-        paramList = (type , identifier , { "," , type , identifier }) | "" ;
-        subroutineBody = "{" , { statement } , "}" ;
-        statement = varDeclarStatement | letStatemnt | ifStatement | whileStatement | doStatement | returnStatemnt ;
-        varDeclarStatement = "var" , type , identifier , { "," , identifier } , ";" ;
-        letStatemnt = "let" , identifier , [ "[" , expression , "]" ] , "=" , expression , ";" ;
-        ifStatement = "if" , "(" , expression , ")" , "{" , { statement } , "}" , [ "else" , "{" , { statement } , "}" ] ;
-        whileStatement = "while" , "(" , expression , ")" , "{" , { statement } , "}" ;
-        doStatement = "do" , subroutineCall , ";" ;
-        subroutineCall = identifier , [ "." , identifier ] , "(" , expressionList , ")" ;
-        expressionList = (expression , { "," , expression }) | "" ;
-        returnStatemnt = "return" , [ expression ] , ";" ;
-        expression = relationalExpression , { ("&" | "|") , relationalExpression } ;
-        relationalExpression = ArithmeticExpression , { ("=" | ">" | "<") , ArithmeticExpression } ;
-        ArithmeticExpression = term , { ("+" | "-") , term } ;
-        term = factor , { ("*" | "/") , factor } ;
-        factor = ("-" | "~" | "") , operand ;
-        operand = integerConstant | identifierTerm | parenExpression | stringLiteral | keywordConstant ;
-        identifierTerm = identifier , (dotIdentifier | arrayAccess | subroutineCallExpr | "") ;
-        dotIdentifier = "." , identifier , (subroutineCallExpr | "") ;
-        arrayAccess = "[" , expression , "]" ;
-        subroutineCallExpr = "(" , expressionList , ")" ;
-        parenExpression = "(" , expression , ")" ;
-        keywordConstant = "true" | "false" | "null" | "this" ;
-    """
- 
+    with open('../tests/sentence_tests/sentence_grammar.txt', 'r') as f:
+        jack_grammar = f.read()
+    print(jack_grammar)
     jack_config = {
         'special_tokens': {
             'identifier': ('IDENTIFIER', 'parse_identifier'),
@@ -320,11 +407,19 @@ def main():
         'symbol_type': 'SYMBOL'
     }
     
-    generator = ParserGenerator(JACK_GRAMMAR, jack_config)
+    generator = ParserGenerator(jack_grammar, jack_config)
     parser_code = generator.generate_parser_code()
     
-    with open('generated_parser.py', 'w') as f:
+    try:
+        os.mkdir("generated_parser")
+    except FileExistsError:
+        print(f"Directory 'generated_parser' already exists.")
+
+    with open('generated_parser/generated_parser.py', 'w') as f:
         f.write(parser_code)
+
+    with open('generated_parser/Lexer.py', 'w') as f:
+        f.write(lexer_code)
         
     print("Parser generated successfully!")
 
