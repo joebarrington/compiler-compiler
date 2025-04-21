@@ -120,7 +120,7 @@ class StandardLexer:
                     self.advance()
                     return Token(TokenType.SYMBOL, symbol, self.line, current_column)
 
-            if self.current_char.isalpha() or self.current_char == '_':
+            if self.current_char.isalpha():
                 return self.identifier()
 
             if self.current_char.isdigit():

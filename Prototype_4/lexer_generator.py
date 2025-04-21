@@ -68,7 +68,6 @@ class StandardLexer:
                 self.advance()
 
     def identifier(self):
-        """Handle identifiers and keywords"""
         result = ''
         start_column = self.column
         
@@ -122,7 +121,7 @@ class StandardLexer:
                     self.advance()
                     return Token(TokenType.SYMBOL, symbol, self.line, current_column)
 
-            if self.current_char.isalpha() or self.current_char == '_':
+            if self.current_char.isalpha():
                 return self.identifier()
 
             if self.current_char.isdigit():

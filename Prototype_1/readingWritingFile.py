@@ -146,7 +146,7 @@ class ParserGenerator:
                     
                     if rep_parts:
                         rep_sequence = ' and '.join(rep_parts)
-                        seq_parts.append("self._repeat_parse(lambda: " + rep_sequence + ")")
+                        seq_parts.append("self.repeat_parse(lambda: " + rep_sequence + ")")
                 
                 elif item['type'] == 'group':
                     group_alts = []
@@ -194,7 +194,7 @@ class GeneratedParser:
                 return True
         return False
     
-    def _repeat_parse(self, parse_fn):
+    def repeat_parse(self, parse_fn):
         while True:
             start_pos = self.pos
             if not parse_fn():
@@ -211,7 +211,7 @@ class GeneratedParser:
         return result
 
     def parse_start(self):
-        return self.parse_expr()  # Start with first rule
+        return self.parse_expr()
 """
         
         first_rule = next(iter(self.rules.keys()))

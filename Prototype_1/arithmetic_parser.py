@@ -35,7 +35,7 @@ class GeneratedParser:
         return result
 
     def parse_start(self):
-        return self.parse_expr()  # Start with first rule
+        return self.parse_expr()
 
     def parse_expr(self):
         start_pos = self.pos

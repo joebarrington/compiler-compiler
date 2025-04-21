@@ -9,7 +9,7 @@ class GeneratedParser:
         self.current_token = None
         self.next_token()
         self._memoization_cache = {}
-        self.error_recovery_points = set()  # Store sync points for error recovery
+        self.error_recovery_points = set() 
     
     @staticmethod
     def memoize(func):

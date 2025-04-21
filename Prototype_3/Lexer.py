@@ -66,7 +66,6 @@ class StandardLexer:
                 self.advance()
 
     def identifier(self):
-        """Handle identifiers and keywords"""
         result = ''
         start_column = self.column
         

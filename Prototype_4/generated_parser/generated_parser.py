@@ -1,38 +1,20 @@
-from Lexer import StandardLexer, TokenType, Token
-import functools
+from generated_parser.Lexer import StandardLexer, TokenType, Token
 
 class GeneratedParser:
     def __init__(self, text: str):
-        self.keywords = {'class'}
-        self.symbols = {'}', '{'}
+        self.keywords = {'a', 'catches', 'watches', 'the', 'chases', 'bird', 'cat', 'dog'}
+        self.symbols = set()
         self.lexer = StandardLexer(text, self.keywords)
         self.current_token = None
         self.next_token()
-        self._memoization_cache = {}
-        self.error_recovery_points = set()  # Store sync points for error recovery
-    
-    @staticmethod
-    def memoize(func):
-        """Decorator for memoizing parser methods"""
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper
+        self.memoization_cache = {}
+        self.error_recovery_points = set()
     def error(self, expected=None):
         token = self.current_token
         line = self.lexer.line
         column = self.lexer.column
         
-        error_context = self._get_error_context()
+        error_context = self.get_error_context()
         
         msg = f"Syntax error at line {line}, column {column}\n"
         msg += f"Got: {token.type}({token.value})\n"
@@ -40,12 +22,12 @@ class GeneratedParser:
             msg += f"Expected: {expected}\n"
         msg += f"Context:\n{error_context}"
         
-        if self._try_error_recovery():
+        if self.try_error_recovery():
             msg += "\nAttempted error recovery and continued parsing."
         
         raise SyntaxError(msg)
     
-    def _get_error_context(self):
+    def get_error_context(self):
         lines = self.lexer.text.split('\n')
         if self.lexer.line <= len(lines):
             error_line = lines[self.lexer.line - 1]
@@ -53,8 +35,7 @@ class GeneratedParser:
             return f"{error_line}\n{pointer}"
         return "Context not available"
         
-    def _try_error_recovery(self):
-        """Attempt to recover from syntax errors by finding synchronization points"""
+    def try_error_recovery(self):
         while self.current_token.type != TokenType.EOF:
             if self.current_token.value in self.error_recovery_points:
                 self.next_token()
@@ -72,7 +53,7 @@ class GeneratedParser:
                 return True
         return False
         
-    def _repeat_parse(self, parse_fn):
+    def repeat_parse(self, parse_fn):
         parsed_at_least_once = False
         while True:
             pos = self.lexer.pos
@@ -83,8 +64,8 @@ class GeneratedParser:
         return True
         
     def parse(self):
-        if not self.parse_classDeclar():
-            self.error("valid classDeclar")
+        if not self.parse_sentence():
+            self.error("valid sentence")
         if self.current_token.type != TokenType.EOF:
             self.error("end of input")
         return True
@@ -97,18 +78,44 @@ class GeneratedParser:
         
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
-    @memoize
-    def parse_classDeclar(self):
+    def parse_sentence(self):
         pos_start = self.lexer.pos
-        if self.match(TokenType.KEYWORD, "class") and self.parse_identifier() and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_memberDeclar()) and self.match(TokenType.SYMBOL, "}"):
+        if self.parse_subject() and self.parse_verb() and self.parse_object():
             return True
         self.lexer.pos = pos_start
         return False
 
-    @memoize
-    def parse_memberDeclar(self):
+    def parse_subject(self):
         pos_start = self.lexer.pos
-        if self.parse_classVarDeclar() or self.parse_subroutineDeclar():
+        if self.parse_article() and self.parse_noun():
+            return True
+        self.lexer.pos = pos_start
+        return False
+
+    def parse_object(self):
+        pos_start = self.lexer.pos
+        if self.parse_article() and self.parse_noun():
+            return True
+        self.lexer.pos = pos_start
+        return False
+
+    def parse_article(self):
+        pos_start = self.lexer.pos
+        if self.match(TokenType.KEYWORD, "the") or self.match(TokenType.KEYWORD, "a"):
+            return True
+        self.lexer.pos = pos_start
+        return False
+
+    def parse_noun(self):
+        pos_start = self.lexer.pos
+        if self.match(TokenType.KEYWORD, "cat") or self.match(TokenType.KEYWORD, "dog") or self.match(TokenType.KEYWORD, "bird"):
+            return True
+        self.lexer.pos = pos_start
+        return False
+
+    def parse_verb(self):
+        pos_start = self.lexer.pos
+        if self.match(TokenType.KEYWORD, "chases") or self.match(TokenType.KEYWORD, "catches") or self.match(TokenType.KEYWORD, "watches"):
             return True
         self.lexer.pos = pos_start
         return False

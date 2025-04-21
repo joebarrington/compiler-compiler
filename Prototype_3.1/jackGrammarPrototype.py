@@ -137,7 +137,6 @@ class GeneratedParser:
     
     @staticmethod
     def memoize(func):
-        """Decorator for memoizing parser methods"""
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
             cache_key = (func.__name__, self.lexer.pos)
@@ -181,7 +180,6 @@ class GeneratedParser:
         return "Context not available"
         
     def _try_error_recovery(self):
-        """Attempt to recover from syntax errors by finding synchronization points"""
         while self.current_token.type != TokenType.EOF:
             if self.current_token.value in self.error_recovery_points:
                 self.next_token()

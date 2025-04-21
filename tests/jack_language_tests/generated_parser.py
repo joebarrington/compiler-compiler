@@ -1,5 +1,4 @@
 from Lexer import StandardLexer, TokenType, Token
-import functools
 
 class GeneratedParser:
     def __init__(self, text: str):
@@ -9,24 +8,8 @@ class GeneratedParser:
         self.current_token = None
         self.next_token()
         self._memoization_cache = {}
-        self.error_recovery_points = set()  # Store sync points for error recovery
+        self.error_recovery_points = set()
     
-    @staticmethod
-    def memoize(func):
-        """Decorator for memoizing parser methods"""
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper
     def error(self, expected=None):
         token = self.current_token
         line = self.lexer.line
@@ -97,7 +80,7 @@ class GeneratedParser:
         
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
-    @memoize
+    
     def parse_classDeclar(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "class") and self.parse_identifier() and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_memberDeclar()) and self.match(TokenType.SYMBOL, "}"):
@@ -105,7 +88,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_memberDeclar(self):
         pos_start = self.lexer.pos
         if self.parse_classVarDeclar() or self.parse_subroutineDeclar():
@@ -113,7 +96,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_classVarDeclar(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.KEYWORD, "static") or self.match(TokenType.KEYWORD, "field")) and self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
@@ -121,7 +104,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_type(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "int") or self.match(TokenType.KEYWORD, "char") or self.match(TokenType.KEYWORD, "boolean") or self.parse_identifier():
@@ -129,7 +112,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_subroutineDeclar(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.KEYWORD, "constructor") or self.match(TokenType.KEYWORD, "function") or self.match(TokenType.KEYWORD, "method")) and (self.parse_type() or self.match(TokenType.KEYWORD, "void")) and self.parse_identifier() and self.match(TokenType.SYMBOL, "(") and self.parse_paramList() and self.match(TokenType.SYMBOL, ")") and self.parse_subroutineBody():
@@ -137,7 +120,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_paramList(self):
         pos_start = self.lexer.pos
         if (self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_type() and self.parse_identifier()))) or True:
@@ -145,7 +128,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_subroutineBody(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}"):
@@ -153,7 +136,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_statement(self):
         pos_start = self.lexer.pos
         if self.parse_varDeclarStatement() or self.parse_letStatemnt() or self.parse_ifStatement() or self.parse_whileStatement() or self.parse_doStatement() or self.parse_returnStatemnt():
@@ -161,7 +144,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_varDeclarStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "var") and self.parse_type() and self.parse_identifier() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
@@ -169,7 +152,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_letStatemnt(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "let") and self.parse_identifier() and ((self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]")) or True) and self.match(TokenType.SYMBOL, "=") and self.parse_expression() and self.match(TokenType.SYMBOL, ";"):
@@ -177,7 +160,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_ifStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "if") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}") and ((self.match(TokenType.KEYWORD, "else") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}")) or True):
@@ -185,7 +168,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_whileStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "while") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self._repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}"):
@@ -193,7 +176,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_doStatement(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "do") and self.parse_subroutineCall() and self.match(TokenType.SYMBOL, ";"):
@@ -201,7 +184,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_subroutineCall(self):
         pos_start = self.lexer.pos
         if self.parse_identifier() and ((self.match(TokenType.SYMBOL, ".") and self.parse_identifier()) or True) and self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")"):
@@ -209,7 +192,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_expressionList(self):
         pos_start = self.lexer.pos
         if (self.parse_expression() and self._repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_expression()))) or True:
@@ -217,7 +200,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_returnStatemnt(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "return") and (self.parse_expression() or True) and self.match(TokenType.SYMBOL, ";"):
@@ -225,7 +208,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_expression(self):
         pos_start = self.lexer.pos
         if self.parse_relationalExpression() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "&") or self.match(TokenType.SYMBOL, "|")) and self.parse_relationalExpression())):
@@ -233,7 +216,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_relationalExpression(self):
         pos_start = self.lexer.pos
         if self.parse_ArithmeticExpression() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "=") or self.match(TokenType.SYMBOL, ">") or self.match(TokenType.SYMBOL, "<")) and self.parse_ArithmeticExpression())):
@@ -241,7 +224,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_ArithmeticExpression(self):
         pos_start = self.lexer.pos
         if self.parse_term() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "+") or self.match(TokenType.SYMBOL, "-")) and self.parse_term())):
@@ -249,7 +232,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_term(self):
         pos_start = self.lexer.pos
         if self.parse_factor() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "*") or self.match(TokenType.SYMBOL, "/")) and self.parse_factor())):
@@ -257,7 +240,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_factor(self):
         pos_start = self.lexer.pos
         if (self.match(TokenType.SYMBOL, "-") or self.match(TokenType.SYMBOL, "~") or True) and self.parse_operand():
@@ -265,7 +248,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_operand(self):
         pos_start = self.lexer.pos
         if self.parse_integerConstant() or self.parse_identifierTerm() or self.parse_parenExpression() or self.parse_stringLiteral() or self.parse_keywordConstant():
@@ -273,7 +256,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_identifierTerm(self):
         pos_start = self.lexer.pos
         if self.parse_identifier() and (self.parse_dotIdentifier() or self.parse_arrayAccess() or self.parse_subroutineCallExpr() or True):
@@ -281,7 +264,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_dotIdentifier(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, ".") and self.parse_identifier() and (self.parse_subroutineCallExpr() or True):
@@ -289,7 +272,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_arrayAccess(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]"):
@@ -297,7 +280,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_subroutineCallExpr(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")"):
@@ -305,7 +288,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_parenExpression(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")"):
@@ -313,7 +296,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_keywordConstant(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "true") or self.match(TokenType.KEYWORD, "false") or self.match(TokenType.KEYWORD, "null") or self.match(TokenType.KEYWORD, "this"):

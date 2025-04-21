@@ -160,7 +160,6 @@ class GrammarParser:
             self.error(str(token_type))
 
     def parse_grammar(self) -> List[Rule]:
-        """Parse a complete grammar"""
         while self.current_token.type != TokenType.EOF:
             rule = self.parse_rule()
             if rule:
@@ -168,7 +167,6 @@ class GrammarParser:
         return self.rules
 
     def parse_rule(self) -> Union[Rule, None]:
-        """Parse a single grammar rule"""
         if self.current_token.type != TokenType.IDENTIFIER:
             return None
 
@@ -176,13 +174,12 @@ class GrammarParser:
         self.eat(TokenType.IDENTIFIER)
         self.eat(TokenType.EQUALS)
         
-        definition = self.parse_expression()
+        definition = self.parse_alternatives()
         self.eat(TokenType.SEMICOLON)
         
         return Rule(name, definition)
 
-    def parse_expression(self) -> ASTNode:
-        """Parse an expression (alternatives)"""
+    def parse_alternatives(self) -> ASTNode:
         terms = [self.parse_sequence()]
         
         while self.current_token.type == TokenType.PIPE:
@@ -192,17 +189,15 @@ class GrammarParser:
         return terms[0] if len(terms) == 1 else Alternative(terms)
 
     def parse_sequence(self) -> ASTNode:
-        """Parse a sequence of terms"""
-        terms = [self.parse_term()]
+        terms = [self.parse_element()]
         
         while self.current_token.type == TokenType.COMMA:
             self.eat(TokenType.COMMA)
-            terms.append(self.parse_term())
+            terms.append(self.parse_element())
             
         return terms[0] if len(terms) == 1 else Sequence(terms)
 
-    def parse_term(self) -> ASTNode:
-        """Parse a single term"""
+    def parse_element(self) -> ASTNode:
         if self.current_token.type == TokenType.TERMINAL:
             value = self.current_token.value
             self.eat(TokenType.TERMINAL)
@@ -215,19 +210,19 @@ class GrammarParser:
             
         elif self.current_token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)
-            expr = self.parse_expression()
+            expr = self.parse_alternatives()
             self.eat(TokenType.RPAREN)
             return expr
             
         elif self.current_token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
-            expr = self.parse_expression()
+            expr = self.parse_alternatives()
             self.eat(TokenType.RBRACE)
             return Repetition(expr)
             
         elif self.current_token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
-            expr = self.parse_expression()
+            expr = self.parse_alternatives()
             self.eat(TokenType.RBRACKET)
             return Optional(expr)
             

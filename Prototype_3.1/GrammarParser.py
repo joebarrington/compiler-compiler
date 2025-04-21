@@ -160,7 +160,6 @@ class GrammarParser:
             self.error(str(token_type))
 
     def parse_grammar(self) -> List[Rule]:
-        """Parse a complete grammar"""
         while self.current_token.type != TokenType.EOF:
             rule = self.parse_rule()
             if rule:
@@ -168,7 +167,6 @@ class GrammarParser:
         return self.rules
 
     def parse_rule(self) -> Union[Rule, None]:
-        """Parse a single grammar rule"""
         if self.current_token.type != TokenType.IDENTIFIER:
             return None
 
@@ -182,7 +180,6 @@ class GrammarParser:
         return Rule(name, definition)
 
     def parse_expression(self) -> ASTNode:
-        """Parse an expression (alternatives)"""
         terms = [self.parse_sequence()]
         
         while self.current_token.type == TokenType.PIPE:
@@ -192,7 +189,6 @@ class GrammarParser:
         return terms[0] if len(terms) == 1 else Alternative(terms)
 
     def parse_sequence(self) -> ASTNode:
-        """Parse a sequence of terms"""
         terms = [self.parse_term()]
         
         while self.current_token.type == TokenType.COMMA:
@@ -202,7 +198,6 @@ class GrammarParser:
         return terms[0] if len(terms) == 1 else Sequence(terms)
 
     def parse_term(self) -> ASTNode:
-        """Parse a single term"""
         if self.current_token.type == TokenType.TERMINAL:
             value = self.current_token.value
             self.eat(TokenType.TERMINAL)

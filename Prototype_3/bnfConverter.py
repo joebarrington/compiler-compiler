@@ -4,17 +4,12 @@ class BNFtoEBNFConverter:
     def __init__(self, bnf_grammar):
         self.bnf_grammar = bnf_grammar
         
-        # Define C symbols and operators that need quotes
         self.c_symbols = [
-            # Operators
             '++', '--', '->', '<<', '>>', '<=', '>=', '==', '!=', '&&', '||',
             '+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '|=', '^=',
-            # Single-char operators
             '+', '-', '*', '/', '%', '<', '>', '&', '^', '!', '~',
-            # Punctuation used in C syntax
             '(', ')', '.', ':', ';', '...'
         ]
-        # Sort by length in reverse order to handle longer operators first
         self.c_symbols.sort(key=len, reverse=True)
     
     def convert(self):
@@ -43,70 +38,53 @@ class BNFtoEBNFConverter:
         return "\n".join(ebnf_rules)
 
     def _quote_c_symbols(self, line):
-        """Quote C symbols but leave EBNF syntax symbols unquoted."""
-        # First protect any already quoted strings
         quoted = []
         def save_quoted(match):
             quoted.append(match.group(0))
             return f'__QUOTED{len(quoted)-1}__'
         
-        # Save existing quoted strings
         line = re.sub(r'"[^"]*"', save_quoted, line)
         
-        # Quote all C symbols
         for symbol in self.c_symbols:
-            # Escape special regex characters
             escaped_symbol = re.escape(symbol)
-            # Only match symbol when it's not part of another symbol
             line = re.sub(f'(?<![\\w"-]){escaped_symbol}(?![\\w"-])', f'"{symbol}"', line)
         
-        # Restore saved quotes
         for i, quoted_str in enumerate(quoted):
             line = line.replace(f'__QUOTED{i}__', quoted_str)
             
         return line
 
     def _process_rule(self, line):
-        # Remove hyphens from identifiers
         line = re.sub(r'<[\w-]+>', lambda m: m.group(0).replace('-', ''), line)
         line = re.sub(r'<([\w-]+)>', lambda m: m.group(1).replace('-', ''), line)
         line = re.sub(r'(^|\s|[({<])([\w-]+)([>})\s]|$)', 
                     lambda m: m.group(1) + m.group(2).replace('-', '') + m.group(3), line)
         
-        # Convert ::= to =
         line = line.replace("::=", "=")
         
-        # Handle all repetitions in one pass
-        line = re.sub(r'\{([^{}]+)\}\+', r'{ \1 }', line)  # Convert + to repetition
-        line = re.sub(r'\{([^{}]+)\}\*', r'{ \1 }', line)  # Convert * to repetition
-        line = re.sub(r'\{([^{}]+)\}\?', r'[ \1 ]', line)  # Convert ? to optional
+        line = re.sub(r'\{([^{}]+)\}\+', r'{ \1 }', line)
+        line = re.sub(r'\{([^{}]+)\}\*', r'{ \1 }', line)
+        line = re.sub(r'\{([^{}]+)\}\?', r'[ \1 ]', line)
         
-        # Quote all C symbols but not EBNF symbols
         line = self._quote_c_symbols(line)
         
-        # Clean up spaces and operators
-        line = re.sub(r'\s*\|\s*', ' | ', line)  # Clean up alternatives
-        line = re.sub(r'\s+', ' ', line)  # Normalize spaces
+        line = re.sub(r'\s*\|\s*', ' | ', line)
+        line = re.sub(r'\s+', ' ', line)
         
-        # Add commas between elements (fixing issues)
-        line = re.sub(r'([}\])])\s+(\w|[{[(])', r'\1 , \2', line)  # After closing brackets, before words or new brackets
-        line = re.sub(r'(\w|[}\])])\s+([{\[(])', r'\1 , \2', line)  # Between words and before opening brackets
-        line = re.sub(r'(\w)\s+(\w)', r'\1 , \2', line)  # Between consecutive words
-        line = re.sub(r'(\w)\s+"([^"]+)"', r'\1 , "\2" ,', line)  # Before quoted terms and ensuring a comma after
-        line = re.sub(r'"([^"]+)"\s+(\w)', r'"\1" , \2', line)  # After quoted terms
+        line = re.sub(r'([}\])])\s+(\w|[{[(])', r'\1 , \2', line)
+        line = re.sub(r'(\w|[}\])])\s+([{\[(])', r'\1 , \2', line)
+        line = re.sub(r'(\w)\s+(\w)', r'\1 , \2', line)
+        line = re.sub(r'(\w)\s+"([^"]+)"', r'\1 , "\2" ,', line)
+        line = re.sub(r'"([^"]+)"\s+(\w)', r'"\1" , \2', line)
         
-        # Ensure commas after quoted symbols
-        line = re.sub(r'"([^"]+)"(?!\s*,)', r'"\1" ,', line)  # If a quote isn't followed by a comma, add one
+        line = re.sub(r'"([^"]+)"(?!\s*,)', r'"\1" ,', line)
         
-        # Remove unnecessary commas before and after alternatives (| operator)
-        line = re.sub(r',\s*\|', ' |', line)  # No comma before "|"
-        line = re.sub(r'\|\s*,', '| ', line)  # No comma after "|"
+        line = re.sub(r',\s*\|', ' |', line)
+        line = re.sub(r'\|\s*,', '| ', line)
 
-        # Remove redundant commas
-        line = re.sub(r',\s*,', ',', line)  # Remove duplicate commas
-        line = re.sub(r',\s*;', ';', line)  # Remove comma before semicolon
+        line = re.sub(r',\s*,', ',', line)
+        line = re.sub(r',\s*;', ';', line)
         
-        # Add semicolon to end rule if missing
         if "=" in line and not line.endswith(";"):
             line += " ;"
         
@@ -115,7 +93,6 @@ class BNFtoEBNFConverter:
 
 
 
-# Example C Grammar in BNF
 C_GRAMMAR = """
 <translation-unit> ::= {<external-declaration>}*
 

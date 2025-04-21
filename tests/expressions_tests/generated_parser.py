@@ -11,22 +11,6 @@ class GeneratedParser:
         self._memoization_cache = {}
         self.error_recovery_points = set()  # Store sync points for error recovery
     
-    @staticmethod
-    def memoize(func):
-        """Decorator for memoizing parser methods"""
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper
     def error(self, expected=None):
         token = self.current_token
         line = self.lexer.line
@@ -97,7 +81,7 @@ class GeneratedParser:
         
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
-    @memoize
+    
     def parse_expr(self):
         pos_start = self.lexer.pos
         if self.parse_term() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "+") or self.match(TokenType.SYMBOL, "-")) and self.parse_term())):
@@ -105,7 +89,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_term(self):
         pos_start = self.lexer.pos
         if self.parse_factor() and self._repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "*") or self.match(TokenType.SYMBOL, "/")) and self.parse_factor())):
@@ -113,7 +97,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_factor(self):
         pos_start = self.lexer.pos
         if self.parse_integerConstant() or (self.match(TokenType.SYMBOL, "(") and self.parse_expr() and self.match(TokenType.SYMBOL, ")")):

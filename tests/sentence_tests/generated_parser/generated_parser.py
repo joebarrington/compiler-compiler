@@ -1,5 +1,4 @@
 from generated_parser.Lexer import StandardLexer, TokenType, Token
-import functools
 
 class GeneratedParser:
     def __init__(self, text: str):
@@ -11,22 +10,7 @@ class GeneratedParser:
         self._memoization_cache = {}
         self.error_recovery_points = set()  # Store sync points for error recovery
     
-    @staticmethod
-    def memoize(func):
-        """Decorator for memoizing parser methods"""
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper
+
     def error(self, expected=None):
         token = self.current_token
         line = self.lexer.line
@@ -97,7 +81,7 @@ class GeneratedParser:
         
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
-    @memoize
+    
     def parse_sentence(self):
         pos_start = self.lexer.pos
         if self.parse_subject() and self.parse_verb() and self.parse_object():
@@ -105,7 +89,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_subject(self):
         pos_start = self.lexer.pos
         if self.parse_article() and self.parse_noun():
@@ -113,7 +97,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_object(self):
         pos_start = self.lexer.pos
         if self.parse_article() and self.parse_noun():
@@ -121,7 +105,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_article(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "the") or self.match(TokenType.KEYWORD, "a"):
@@ -129,7 +113,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_noun(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "cat") or self.match(TokenType.KEYWORD, "dog") or self.match(TokenType.KEYWORD, "bird"):
@@ -137,7 +121,7 @@ class GeneratedParser:
         self.lexer.pos = pos_start
         return False
 
-    @memoize
+    
     def parse_verb(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "chases") or self.match(TokenType.KEYWORD, "catches") or self.match(TokenType.KEYWORD, "watches"):

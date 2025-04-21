@@ -66,7 +66,6 @@ class StandardLexer:
                 self.advance()
 
     def identifier(self):
-        """Handle identifiers and keywords"""
         result = ''
         start_column = self.column
         
@@ -111,17 +110,14 @@ class StandardLexer:
                 continue
 
             if self.current_char == '/':
-                # Store current position for potential token creation
                 current_column = self.column
                 
-                # Check for comments
                 if self.peek() in ['/', '*']:
                     self.skip_comment()
                     continue
                 else:
-                    # It's a division operator, create token and advance
                     symbol = self.current_char
-                    self.advance()  # Advance past the '/' character
+                    self.advance()
                     return Token(TokenType.SYMBOL, symbol, self.line, current_column)
 
             if self.current_char.isalpha() or self.current_char == '_':

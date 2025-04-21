@@ -1,0 +1,15 @@
+grammar Expression;
+
+expr : term (op=('+'|'-') term)* ;
+term : factor (op=('*'|'/') factor)* ;
+factor : INT | '(' expr ')' ;
+
+INT : [0-9]+ ;
+WS : [ \t\r\n]+ -> skip ;
+
+
+
+
+
+
+

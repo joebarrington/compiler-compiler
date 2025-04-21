@@ -68,7 +68,7 @@ class EBNFLexer(BaseLexer):
                 '*': TokenType.STAR,
                 '+': TokenType.PLUS,
                 '?': TokenType.QUESTION,
-                '-': None  # Allow hyphen in identifiers
+                '-': None
             }
 
             if self.current_char in char_to_token:
@@ -167,7 +167,6 @@ class EBNFParser(BaseParser):
 
     def parse_term(self) -> ASTNode:
         """Parse a single term with possible repetition or optional markers"""
-        # Parse the base term
         if self.current_token.type == TokenType.TERMINAL:
             term = Terminal(self.current_token.value)
             self.eat(TokenType.TERMINAL)
@@ -191,7 +190,6 @@ class EBNFParser(BaseParser):
         else:
             self.error('term')
 
-        # Check for repetition or optional markers
         if self.current_token.type in {TokenType.STAR, TokenType.PLUS, TokenType.QUESTION}:
             if self.current_token.type == TokenType.STAR:
                 self.eat(TokenType.STAR)
@@ -199,7 +197,7 @@ class EBNFParser(BaseParser):
             elif self.current_token.type == TokenType.PLUS:
                 self.eat(TokenType.PLUS)
                 return Sequence([term, Repetition(term)])
-            else:  # QUESTION
+            else:
                 self.eat(TokenType.QUESTION)
                 return Optional(term)
 
