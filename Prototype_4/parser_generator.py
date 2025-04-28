@@ -337,7 +337,7 @@ if __name__ == "__main__":
         return nodes
 
 def main():
-    with open('../tests/sentence_tests/sentence_grammar.txt', 'r') as f:
+    with open('../tests/jack_language_tests/jack_grammar.txt', 'r') as f:
         jack_grammar = f.read()
     print(jack_grammar)
     jack_config = {
@@ -365,7 +365,7 @@ def main():
     with open('generated_parser/Lexer.py', 'w') as f:
         f.write(lexer_code)
     final_time = time.time()
-    print(f"Parser generated in {final_time - start_time:.4f} seconds")
+    print(f"Parser generated in {final_time - start_time:.8f} seconds")
 
 if __name__ == "__main__":
     main()

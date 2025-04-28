@@ -2,7 +2,6 @@ import os
 import sys
 import time
 from pathlib import Path
-import psutil
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -13,63 +12,58 @@ ERROR_FILES = [
 ]
 
 def test_parser(file_path, expect_error=False):
-    parser_creation_time = 0
+    """Test the parser on a file and check if the result matches expectations."""
     parsing_time = 0
-    
     try:
         with open(file_path, 'r') as file:
             code = file.read()
         
         print(f"Testing file: {file_path}")
-        
-        process = psutil.Process(os.getpid())
-        memory_before = process.memory_info().rss / (1024 * 1024)
-        
-        parser_start_time = time.time()
         parser = GeneratedParser(code)
-        parser_end_time = time.time()
-        parser_creation_time = parser_end_time - parser_start_time
         
-        parsing_start_time = time.time()
+        # Measure parsing time
+        start_time = time.perf_counter()
         result = parser.parse()
-        parsing_end_time = time.time()
-        parsing_time = parsing_end_time - parsing_start_time
+        end_time = time.perf_counter()
+        parsing_time = end_time - start_time
         
-        memory_after = process.memory_info().rss / (1024 * 1024)
-        memory_used = memory_after - memory_before
-        
-        print(f"Parser creation time: {parser_creation_time:.4f} seconds")
-        print(f"Parsing time: {parsing_time:.4f} seconds")
-        print(f"Memory usage: {memory_used:.2f} MB")
+        print(f"Parsing time: {parsing_time:.6f} seconds")
         
         if expect_error:
             print(f"UNEXPECTED SUCCESS: File {file_path} was expected to fail but parsed successfully")
-            return False, parser_creation_time, parsing_time, memory_used
+            return False, parsing_time
         else:
             print(f"SUCCESS: File {file_path} parsed as expected")
-            return True, parser_creation_time, parsing_time, memory_used
+            return True, parsing_time
+            
+    except SyntaxError as e:
+        if 'start_time' in locals():
+            end_time = time.perf_counter()
+            parsing_time = end_time - start_time
+            print(f"Parsing time until error: {parsing_time:.6f} seconds")
+            
+        if expect_error:
+            print(f"SUCCESS: File {file_path} failed with expected syntax error: {str(e)[:100]}...")
+            return True, parsing_time
+        else:
+            print(f"UNEXPECTED FAILURE: File {file_path} failed with syntax error: {str(e)[:100]}...")
+            return False, parsing_time
             
     except Exception as e:
-        try:
-            memory_after = process.memory_info().rss / (1024 * 1024)
-            memory_used = memory_after - memory_before
-        except:
-            memory_used = 0.0
+        if 'start_time' in locals():
+            end_time = time.perf_counter()
+            parsing_time = end_time - start_time
+            print(f"Parsing time until error: {parsing_time:.6f} seconds")
             
-        error_message = str(e)
-        is_syntax_error = isinstance(e, SyntaxError)
-        
-        print(f"{'Parsing' if parsing_time > 0 else 'Setup'} time until error: {parser_creation_time:.4f} seconds")
-        print(f"Memory usage: {memory_used:.2f} MB")
-        
         if expect_error:
-            print(f"SUCCESS: File {file_path} failed with expected {'syntax ' if is_syntax_error else ''}error: {error_message[:100]}...")
-            return True, parser_creation_time, parsing_time, memory_used
+            print(f"SUCCESS: File {file_path} failed with expected error: {str(e)[:100]}...")
+            return True, parsing_time
         else:
-            print(f"UNEXPECTED FAILURE: File {file_path} failed with {'syntax ' if is_syntax_error else ''}error: {error_message[:100]}...")
-            return False, parser_creation_time, parsing_time, memory_used
+            print(f"UNEXPECTED FAILURE: File {file_path} failed with error: {str(e)[:100]}...")
+            return False, parsing_time
 
 def test_all_files(directory):
+    """Test all .jack files in the specified directory."""
     results = {
         "expected_success_correct": 0,
         "expected_success_wrong": 0,
@@ -77,11 +71,8 @@ def test_all_files(directory):
         "expected_error_wrong": 0
     }
     
-    performance_data = {
-        "parser_creation_times": [],
-        "parsing_times": [],
-        "memory_usage": []
-    }
+    # Track parsing times
+    parsing_times = []
     
     jack_files = list(Path(directory).glob('**/*.jack'))
     
@@ -92,11 +83,8 @@ def test_all_files(directory):
         file_name = file_path.stem
         expect_error = any(error_pattern in file_name for error_pattern in ERROR_FILES)
         
-        success, parser_time, parsing_time, memory = test_parser(file_path, expect_error)
-        
-        performance_data["parser_creation_times"].append(parser_time)
-        performance_data["parsing_times"].append(parsing_time)
-        performance_data["memory_usage"].append(memory)
+        success, parsing_time = test_parser(file_path, expect_error)
+        parsing_times.append(parsing_time)
         
         if expect_error:
             if success:
@@ -124,14 +112,18 @@ def test_all_files(directory):
     print(f"Files expected to fail and did: {results['expected_error_correct']}")
     print(f"Files expected to fail but passed: {results['expected_error_wrong']}")
     
-    print("\nPERFORMANCE METRICS:")
-    print(f"Average parser creation time: {sum(performance_data['parser_creation_times'])/len(performance_data['parser_creation_times']):.4f} seconds")
-    print(f"Average parsing time: {sum(performance_data['parsing_times'])/len(performance_data['parsing_times']):.4f} seconds")
-    print(f"Average memory usage: {sum(performance_data['memory_usage'])/len(performance_data['memory_usage']):.2f} MB")
-    print(f"Maximum memory usage: {max(performance_data['memory_usage']):.2f} MB")
+    # Add performance metrics
+    if parsing_times:
+        avg_parsing_time = sum(parsing_times) / len(parsing_times)
+        max_parsing_time = max(parsing_times)
+        min_parsing_time = min(parsing_times)
+        print("\nPERFORMANCE METRICS:")
+        print(f"Average parsing time: {avg_parsing_time:.7f} seconds")
+        print(f"Maximum parsing time: {max_parsing_time:.7f} seconds")
+        print(f"Minimum parsing time: {min_parsing_time:.7f} seconds")
     
-    return results, performance_data
+    return results, parsing_times
 
 if __name__ == "__main__":
     test_dir = sys.argv[1] if len(sys.argv) > 1 else "test_files"
-    test_all_files(test_dir)
+    results, parsing_times = test_all_files(test_dir)

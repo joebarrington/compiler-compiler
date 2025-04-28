@@ -112,9 +112,9 @@ def test_all_files(directory):
         max_parsing_time = max(parsing_times)
         min_parsing_time = min(parsing_times)
         print("\nPERFORMANCE METRICS:")
-        print(f"Average parsing time: {avg_parsing_time:.6f} seconds")
-        print(f"Maximum parsing time: {max_parsing_time:.6f} seconds")
-        print(f"Minimum parsing time: {min_parsing_time:.6f} seconds")
+        print(f"Average parsing time: {avg_parsing_time:.7f} seconds")
+        print(f"Maximum parsing time: {max_parsing_time:.7f} seconds")
+        print(f"Minimum parsing time: {min_parsing_time:.7f} seconds")
     
     return results, parsing_times
 
