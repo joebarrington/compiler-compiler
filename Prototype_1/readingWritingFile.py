@@ -7,6 +7,8 @@ class Rule:
     name: str
     alternatives: List[List[dict]]
 
+
+#Gramar parser transforms the grammar input into a set of rules and tokens.
 class GrammarParser:
     def __init__(self, grammar: str):
         self.grammar = grammar
@@ -101,6 +103,7 @@ class GrammarParser:
             
             self.rules[name] = Rule(name, alternatives)
 
+#Parser generator uses the formatted grammar to generate basic parser code.
 class ParserGenerator:
     def __init__(self, grammar: str):
         self.grammar_parser = GrammarParser(grammar)
@@ -123,6 +126,7 @@ class ParserGenerator:
                 elif item['type'] == 'nonterminal':
                     seq_parts.append(f'self.parse_{item["value"]}()')
                 
+                #Begins the repetition of a sequence of tokens.
                 elif item['type'] == 'repetition':
                     if seq_parts:
                         initial_sequence = ' and '.join(seq_parts)
@@ -172,7 +176,7 @@ class ParserGenerator:
 
 
 
-
+    #Generates the basic parser code and also calls the generate_rule_method for each rule.
     def generate_parser(self) -> str:
         code = """
 class GeneratedParser:
@@ -244,11 +248,6 @@ def main():
     print("Generating arithmetic parser...")
     arithmetic_generator = ParserGenerator(arithmetic_grammar)
     arithmetic_parser_code = arithmetic_generator.generate_parser()
-    print("\nDebugging Grammar Parsing:")
-    for rule_name, rule in arithmetic_generator.rules.items():
-        print(f"\nRule: {rule_name}")
-        for alt in rule.alternatives:
-            print("  Alternative:", alt)
     
     with open('arithmetic_parser.py', 'w') as f:
         f.write(arithmetic_parser_code)
@@ -280,7 +279,6 @@ def main():
         except SyntaxError as e:
             print(f"Invalid arithmetic expression: {expr} - {e}")
 
-    print("\nTesting sentence parser...")
     test_sentences = ["a bird chases a dog", "the cat watches the bird"]
     
     exec(sentence_parser_code)
