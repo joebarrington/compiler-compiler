@@ -1,6 +1,9 @@
-from GrammarParser import GrammarParser, Terminal, NonTerminal, Sequence, Alternative, Repetition, Optional, Rule
+from grammar_parser import GrammarParser, Terminal, NonTerminal, Sequence, Alternative, Repetition, Optional, Rule
 from typing import Dict, Set, List, Tuple, Optional as OptionalType
 from dataclasses import dataclass
+from lexer_generator import lexer_code
+import os
+import time
 
 @dataclass
 class TokenConfig:
@@ -8,10 +11,13 @@ class TokenConfig:
     token_type: str
     parser_method: str
 
+#initializing the ParserGenerator class, using GrammarParser class to parse the input grammar.
+#Running this program will automatically generate a parser for the JACK language.
 class ParserGenerator:
-    def __init__(self, grammar: str, token_config: Dict[str, Tuple[str, str]] = None):
+    def __init__(self, grammar: str, token_config: Dict[str, Dict[str, Tuple[str, str]]] = None):
         parser = GrammarParser(grammar)
         self.ast = parser.parse_grammar()
+        print(self.ast)
         self.keywords: Set[str] = set()
         self.symbols: Set[str] = set()
         
@@ -25,18 +31,73 @@ class ParserGenerator:
             'symbol_type': 'SYMBOL'
         } if token_config is None else token_config
 
-        self.precedence_rules = self._generate_precedence_rules(self.ast)
-        self._collect_terminals()
+        self.preprocess_grammar()
+        
+        self.collect_terminals()
 
-    def _collect_terminals(self):
+    # Preprocess the grammar to rename 'number' to 'integerConstant'
+    def preprocess_grammar(self):
+        rule_map = {rule.name: rule for rule in self.ast}
+        number_rule = rule_map.get('number')
+        digit_rule = rule_map.get('digit')
+
+        if number_rule and digit_rule:
+            if self._is_digit_sequence(number_rule.definition):
+                self._rename_nonterminal('number', 'integerConstant')
+
+    def _is_digit_sequence(self, definition):
+        if isinstance(definition, Sequence):
+            items = definition.items
+            return (
+                len(items) >= 1 and 
+                isinstance(items[0], NonTerminal) and items[0].name == 'digit' and
+                (len(items) == 1 or (
+                    isinstance(items[1], Repetition) and 
+                    isinstance(items[1].item, NonTerminal) and 
+                    items[1].item.name == 'digit'))
+            )
+        return False
+
+    def _rename_nonterminal(self, old_name: str, new_name: str):
+        def rename(node):
+            if isinstance(node, NonTerminal) and node.name == old_name:
+                node.name = new_name
+                return Terminal(new_name)
+            return None  
+
+        #function used to traverse the AST 
+        def traverse(node):
+            if isinstance(node, (Sequence, Alternative)):
+                children = node.items if isinstance(node, Sequence) else node.options
+                for i, child in enumerate(children):
+                    replacement = traverse(child)
+                    if replacement:
+                        children[i] = replacement
+            elif isinstance(node, (Repetition, Optional)):
+                replacement = traverse(node.item)
+                if replacement:
+                    node.item = replacement
+            return rename(node)
+
+        for rule in self.ast:
+            traverse(rule.definition)
+
+    # Collect terminals and keywords from the grammar
+    def collect_terminals(self):
+        #visits each node collecting the terminal
         def visit(node):
             if isinstance(node, Terminal):
+                special_tokens = self.token_config.get('special_tokens', {}).keys()
+                if node.value in special_tokens:
+                    return
+                
                 if node.value.isalpha():
                     self.keywords.add(node.value)
                 else:
-                    self.symbols.add(node.value)
+                    if not node.value.isdigit():
+                        self.symbols.add(node.value)
             elif isinstance(node, (Sequence, Alternative)):
-                for child in (node.items if isinstance(node, Sequence) else node.options):
+                for child in node.items if isinstance(node, Sequence) else node.options:
                     visit(child)
             elif isinstance(node, (Repetition, Optional)):
                 visit(node.item)
@@ -46,33 +107,22 @@ class ParserGenerator:
         for rule in self.ast:
             visit(rule)
 
-    def _generate_precedence_rules(self, rules: List[Rule]) -> Dict[str, int]:
-        precedence = {}
-        current_level = 0
-        
-        for rule in rules:
-            if rule.name.endswith('Expression'):
-                operators = self._extract_operators(rule.definition)
-                for op in operators:
-                    precedence[op] = current_level
-                current_level += 1
-        
-        return precedence
-
-    def _extract_operators(self, node) -> List[str]:
+    #collects all operators and stores them
+    def extract_operators(self, node) -> List[str]:
         operators = []
         if isinstance(node, Alternative):
             for option in node.options:
                 if isinstance(option, Terminal) and not option.value.isalpha():
                     operators.append(option.value)
             for option in node.options:
-                operators.extend(self._extract_operators(option))
+                operators.extend(self.extract_operators(option))
         elif isinstance(node, Sequence):
             for item in node.items:
-                operators.extend(self._extract_operators(item))
+                operators.extend(self.extract_operators(item))
         return operators
 
-    def _generate_node_code(self, node) -> str:
+    #This is the main code that generates the parser code. It uses the AST generated from the grammar to create specialized functions.
+    def generate_node_code(self, node) -> str:
         if isinstance(node, Terminal):
             if node.value == "":
                 return 'True'
@@ -86,12 +136,15 @@ class ParserGenerator:
                 return f'self.match(TokenType.{self.token_config["symbol_type"]}, "{node.value}")'
                 
         elif isinstance(node, NonTerminal):
+            if node.name == 'integerConstant':
+                token_type, parser_method = self.token_config['special_tokens']['integerConstant']
+                return f'self.{parser_method}()'
             return f'self.parse_{node.name}()'
             
         elif isinstance(node, Sequence):
             parts = []
             for item in node.items:
-                part = self._generate_node_code(item)
+                part = self.generate_node_code(item)
                 if isinstance(item, Alternative):
                     part = f'({part})'
                 parts.append(part)
@@ -100,20 +153,20 @@ class ParserGenerator:
         elif isinstance(node, Alternative):
             parts = []
             for option in node.options:
-                part = self._generate_node_code(option)
+                part = self.generate_node_code(option)
                 if isinstance(option, Sequence):
                     part = f'({part})'
                 parts.append(part)
             return ' or '.join(parts)
             
         elif isinstance(node, Repetition):
-            inner = self._generate_node_code(node.item)
+            inner = self.generate_node_code(node.item)
             if isinstance(node.item, (Alternative, Sequence)):
                 inner = f'({inner})'
-            return f'self._repeat_parse(lambda: {inner})'
+            return f'self.repeat_parse(lambda: {inner})'
             
         elif isinstance(node, Optional):
-            inner = self._generate_node_code(node.item)
+            inner = self.generate_node_code(node.item)
             if isinstance(node.item, (Alternative, Sequence)):
                 inner = f'({inner})'
             return f'({inner} or True)'
@@ -121,9 +174,9 @@ class ParserGenerator:
         else:
             raise Exception(f'Unknown node type: {type(node)}')
 
-    def _generate_parser_header(self) -> str:
-        return f'''from Lexer import StandardLexer, TokenType, Token
-import functools
+    # This function generates the header for the parser class, including the initialization of keywords and symbols.
+    def generate_parser_header(self) -> str:
+        return f'''from generated_parser.Lexer import StandardLexer, TokenType, Token
 
 class GeneratedParser:
     def __init__(self, text: str):
@@ -132,33 +185,18 @@ class GeneratedParser:
         self.lexer = StandardLexer(text, self.keywords)
         self.current_token = None
         self.next_token()
-        self._memoization_cache = {{}}
-        self.error_recovery_points = set()  # Store sync points for error recovery
-    
-    @staticmethod
-    def memoize(func):
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper'''
+        self.memoization_cache = {{}}
+        self.error_recovery_points = set()'''
 
-    def _generate_error_handling(self) -> str:
+    #seperate function for generating the error handling code
+    def generate_error_handling(self) -> str:
         return '''
     def error(self, expected=None):
         token = self.current_token
         line = self.lexer.line
         column = self.lexer.column
         
-        error_context = self._get_error_context()
+        error_context = self.get_error_context()
         
         msg = f"Syntax error at line {line}, column {column}\\n"
         msg += f"Got: {token.type}({token.value})\\n"
@@ -166,12 +204,12 @@ class GeneratedParser:
             msg += f"Expected: {expected}\\n"
         msg += f"Context:\\n{error_context}"
         
-        if self._try_error_recovery():
+        if self.try_error_recovery():
             msg += "\\nAttempted error recovery and continued parsing."
         
         raise SyntaxError(msg)
     
-    def _get_error_context(self):
+    def get_error_context(self):
         lines = self.lexer.text.split('\\n')
         if self.lexer.line <= len(lines):
             error_line = lines[self.lexer.line - 1]
@@ -179,7 +217,7 @@ class GeneratedParser:
             return f"{error_line}\\n{pointer}"
         return "Context not available"
         
-    def _try_error_recovery(self):
+    def try_error_recovery(self):
         while self.current_token.type != TokenType.EOF:
             if self.current_token.value in self.error_recovery_points:
                 self.next_token()
@@ -187,7 +225,8 @@ class GeneratedParser:
             self.next_token()
         return False'''
 
-    def _generate_parser_methods(self) -> str:
+    # This function generates the parser methods for matching and parsing tokens.
+    def generate_parser_methods(self) -> str:
         return '''
     def next_token(self):
         self.current_token = self.lexer.get_next_token()
@@ -200,7 +239,7 @@ class GeneratedParser:
                 return True
         return False
         
-    def _repeat_parse(self, parse_fn):
+    def repeat_parse(self, parse_fn):
         parsed_at_least_once = False
         while True:
             pos = self.lexer.pos
@@ -227,24 +266,36 @@ class GeneratedParser:
         return self.match(TokenType.STRING)'''.format(self.ast[0].name)
 
     def generate_parser_code(self) -> str:
-        parser_code = self._generate_parser_header()
+        parser_code = self.generate_parser_header()
         
-        parser_code += self._generate_error_handling()
+        parser_code += self.generate_error_handling()
         
-        parser_code += self._generate_parser_methods()
+        parser_code += self.generate_parser_methods()
 
+        skip_rules = set()
+        #skip rules that have been preprocessed
+        if any(rule.name == 'integerConstant' for rule in self.ast) or any(
+            isinstance(node, NonTerminal) and node.name == 'integerConstant' 
+            for rule in self.ast 
+            for node in self.get_all_nodes(rule.definition)):
+            skip_rules.add('digit')
+            
+        #creates the specialised functions. Each function is called parse_<rule_name>.
         for rule in self.ast:
+            if rule.name in skip_rules:
+                continue
+                
             method = f'''
-    @memoize
     def parse_{rule.name}(self):
         pos_start = self.lexer.pos
-        if {self._generate_node_code(rule.definition)}:
+        if {self.generate_node_code(rule.definition)}:
             return True
         self.lexer.pos = pos_start
         return False
 '''
             parser_code += method
 
+        #This is the code that will be used to test the generated parser.
         parser_code += '''
 def test_parser(file_path=None):
     if file_path:
@@ -275,54 +326,20 @@ if __name__ == "__main__":
 '''
     
         return parser_code
+        
+    def get_all_nodes(self, node):
+        nodes = [node]
+        if isinstance(node, (Sequence, Alternative)):
+            for child in node.items if isinstance(node, Sequence) else node.options:
+                nodes.extend(self.get_all_nodes(child))
+        elif isinstance(node, (Repetition, Optional)):
+            nodes.extend(self.get_all_nodes(node.item))
+        return nodes
 
 def main():
-    # JACK_GRAMMAR = """
-    #     classDeclar = "class" , identifier , "{" , { memberDeclar } , "}" ;
-    #     memberDeclar = classVarDeclar | subroutineDeclar ;
-    #     classVarDeclar = ("static" | "field") , type , identifier , { "," , identifier } , ";" ;
-    #     type = "int" | "char" | "boolean" | identifier ;
-    #     subroutineDeclar = ("constructor" | "function" | "method") , (type | "void") , identifier , "(" , paramList , ")" , subroutineBody ;
-    #     paramList = (type , identifier , { "," , type , identifier }) | "" ;
-    #     subroutineBody = "{" , { statement } , "}" ;
-    #     statement = varDeclarStatement | letStatemnt | ifStatement | whileStatement | doStatement | returnStatemnt ;
-    #     varDeclarStatement = "var" , type , identifier , { "," , identifier } , ";" ;
-    #     letStatemnt = "let" , identifier , [ "[" , expression , "]" ] , "=" , expression , ";" ;
-    #     ifStatement = "if" , "(" , expression , ")" , "{" , { statement } , "}" , [ "else" , "{" , { statement } , "}" ] ;
-    #     whileStatement = "while" , "(" , expression , ")" , "{" , { statement } , "}" ;
-    #     doStatement = "do" , subroutineCall , ";" ;
-    #     subroutineCall = identifier , [ "." , identifier ] , "(" , expressionList , ")" ;
-    #     expressionList = (expression , { "," , expression }) | "" ;
-    #     returnStatemnt = "return" , [ expression ] , ";" ;
-    #     expression = relationalExpression , { ("&" | "|") , relationalExpression } ;
-    #     relationalExpression = ArithmeticExpression , { ("=" | ">" | "<") , ArithmeticExpression } ;
-    #     ArithmeticExpression = term , { ("+" | "-") , term } ;
-    #     term = factor , { ("*" | "/") , factor } ;
-    #     factor = ("-" | "~" | "") , operand ;
-    #     operand = integerConstant | 
-    #             identifier , [ "." , identifier ] , [ "[" , expression , "]" ] |
-    #             identifier , [ "." , identifier ] , "(" , expressionList , ")" |
-    #             "(" , expression , ")" |
-    #             stringLiteral |
-    #             "true" | "false" | "null" | "this" ;
-    # """
-    JSON_GRAMMAR = """
-    json = object | array ;
-    
-    object = "{" , [ pair , { "," , pair } ] , "}" ;
-    pair = string , ":" , value ;
-
-    array = "[" , [ value , { "," , value } ] , "]" ;
-
-    value = string | number | object | array | "true" | "false" | "null" ;
-
-    string =  { "TEXT" } ;
-    number = [ "-" ] , digits , [ "." , digits ] , [ ("e" | "E") , [ "+" | "-" ] , digits ] ;
-
-    digits = digit , { digit } ;
-    digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
-"""
-
+    with open('../tests/jack_language_tests/jack_grammar.txt', 'r') as f:
+        jack_grammar = f.read()
+    print(jack_grammar)
     jack_config = {
         'special_tokens': {
             'identifier': ('IDENTIFIER', 'parse_identifier'),
@@ -332,14 +349,23 @@ def main():
         'keyword_type': 'KEYWORD',
         'symbol_type': 'SYMBOL'
     }
+    start_time = time.time()
     
-    generator = ParserGenerator(JSON_GRAMMAR, jack_config)
+    generator = ParserGenerator(jack_grammar, jack_config)
     parser_code = generator.generate_parser_code()
     
-    with open('generated_parser.py', 'w') as f:
+    try:
+        os.mkdir("generated_parser")
+    except FileExistsError:
+        print(f"Directory 'generated_parser' already exists.")
+
+    with open('generated_parser/generated_parser.py', 'w') as f:
         f.write(parser_code)
-        
-    print("Parser generated successfully!")
+
+    with open('generated_parser/Lexer.py', 'w') as f:
+        f.write(lexer_code)
+    final_time = time.time()
+    print(f"Parser generated in {final_time - start_time:.8f} seconds")
 
 if __name__ == "__main__":
     main()

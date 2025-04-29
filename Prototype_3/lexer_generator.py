@@ -1,3 +1,6 @@
+
+#Thss is the lexer code. It is generated from within the parser generator and is written to a file as a raw string.
+lexer_code =  r'''
 from dataclasses import dataclass
 
 class TokenType:
@@ -27,7 +30,7 @@ class StandardLexer:
         
         self.symbols = {
             '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-',
-            '*', '/', '&', '|', '<', '>', '=', '~', ':'
+            '*', '/', '&', '|', '<', '>', '=', '~'
         }
 
     def error(self):
@@ -109,12 +112,17 @@ class StandardLexer:
                 continue
 
             if self.current_char == '/':
+                current_column = self.column
+                
                 if self.peek() in ['/', '*']:
                     self.skip_comment()
                     continue
-                return Token(TokenType.SYMBOL, '/', self.line, self.column)
+                else:
+                    symbol = self.current_char
+                    self.advance()
+                    return Token(TokenType.SYMBOL, symbol, self.line, current_column)
 
-            if self.current_char.isalpha() or self.current_char == '_':
+            if self.current_char.isalpha():
                 return self.identifier()
 
             if self.current_char.isdigit():
@@ -133,32 +141,4 @@ class StandardLexer:
 
         return Token(TokenType.EOF, '', self.line, self.column)
 
-def example():
-    jack_keywords = {
-        'class', 'constructor', 'function', 'method', 'field', 'static',
-        'var', 'int', 'char', 'boolean', 'void', 'true', 'false', 'null',
-        'this', 'let', 'do', 'if', 'else', 'while', 'return'
-    }
-    
-    code = '''
-    class Example {
-        field int x;
-        
-        method void test() {
-            var int temp;
-            let temp = 42;
-            return;
-        }
-    }
-    '''
-    
-    lexer = StandardLexer(code, jack_keywords)
-    
-    while True:
-        token = lexer.get_next_token()
-        print(f"Token: {token}")
-        if token.type == TokenType.EOF:
-            break
-
-if __name__ == "__main__":
-    example()
+'''

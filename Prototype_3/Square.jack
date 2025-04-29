@@ -1,108 +1,65 @@
 // This file is part of www.nand2tetris.org
 // and the book "The Elements of Computing Systems"
 // by Nisan and Schocken, MIT Press.
-// File name: projects/09/Square/Square.jack
+// File name: projects/09/Fraction/Fraction.jack
 
-/** Implements a graphical square. */
-class Square {
-
-   field int x, y; // screen location of the square's top-left corner
-   field int size; // length of this square, in pixels
-
-   /** Constructs a new square with a given location and size. */
-   constructor Square new(int Ax, int Ay, int Asize) {
-      let x = Ax;
-      let y = Ay;
-      let size = Asize;
-      do draw();
-      return this;
+/** Represents the Fraction type and related operations. */
+class Fraction {
+   field int numerator, denominator;  // field = property = member variable.
+  
+   /** Constructs a (reduced) fraction from the given numerator and denominator. */
+   constructor Fraction new(int x, int y) {
+      let numerator = x;
+      let denominator = y;
+      do reduce();   // reduces the fraction
+      return this;   // a constructor is expected to return a reference to the new object
    }
 
-   /** Disposes this square. */
-   method void test() {
-      do Memory.deAlloc(this);
-      return;
-   }
-
-   /** Draws the square on the screen. */
-   method void draw() {
-      do Screen.setColor(true);
-      do Screen.drawRectangle(x, y, x + size, y + size);
-      return;
-   }
-
-   /** Erases the square from the screen. */
-   method void erase() {
-      do Screen.setColor(false);
-      do Screen.drawRectangle(x, y, x + size, y + size);
-      return;
-   }
-
-    /** Increments the square size by 2 pixels. */
-   method void incSize() {
-      if (((y + size) < 254) & ((x + size) < 510)) {
-         do erase();
-         let size = size + 2;
-         do draw();
+   // Reduces this fraction.
+   method void reduce() {
+      var int g;
+      let g = Fraction.gcd(numerator, denominator);
+      if (g > 1) {
+         let numerator = numerator / g;
+         let denominator = denominator / g;
       }
       return;
    }
 
-   /** Decrements the square size by 2 pixels. */
-   method void decSize() {
-      if (size > 2) {
-         do erase();
-         let size = size - 2;
-         do draw();
-      }
+   /** Accessors. */
+   method int getNumerator() { return numerator; }
+   method int getDenominator() { return denominator; }  
+
+   /** Returns the sum of this fraction and the other one. */
+   method Fraction plus(Fraction other) {
+      var int sum;
+      let sum = (numerator * other.getDenominator()) + (other.getNumerator() * denominator);
+      return Fraction.new(sum, denominator * other.getDenominator());
+   }
+
+   // More fraction-related methods (minus, times, div, etc.) can be added here.
+  
+   /** Disposes this fraction. */
+   method void dispose() {
+      do Memory.deAlloc(this);  // uses an OS routine to recycle the memory held by the object
+      return;
+   }
+   
+   /** Prints this fraction in the format x/y. */
+   method void print() {
+      do Output.printInt(numerator);
+      do Output.printString("/");
+      do Output.printInt(denominator);
       return;
    }
 
-   /** Moves the square up by 2 pixels. */
-   method void moveUp() {
-      if (y > 1) {
-         do Screen.setColor(false);
-         do Screen.drawRectangle(x, (y + size) - 1, x + size, y + size);
-         let y = y - 2;
-         do Screen.setColor(true);
-         do Screen.drawRectangle(x, y, x + size, y + 1);
+   // Computes the greatest common divisor of the given integers.
+   function int gcd(int a, int b) {
+      var int r;
+      while (~(b = 0)) {             // applies Euclid's algorithm
+         let r = a - (b * (a / b));  // r = remainder of the integer division a/b
+         let a = b; let b = r;
       }
-      return;
-   }
-
-   /** Moves the square down by 2 pixels. */
-   method void moveDown() {
-      if ((y + size) < 254) {
-         do Screen.setColor(false);
-         do Screen.drawRectangle(x, y, x + size, y + 1);
-         let y = y + 2;
-         do Screen.setColor(true);
-         do Screen.drawRectangle(x, (y + size) - 1, x + size, y + size);
-      }
-      return;
-   }
-
-   /** Moves the square left by 2 pixels. */
-   method void moveLeft() {
-      if (x > 1) {
-         do Screen.setColor(false);
-         do Screen.drawRectangle((x + size) - 1, y, x + size, y + size);
-         let x = x - 2;
-         do Screen.setColor(true);
-         do Screen.drawRectangle(x, y, x + 1, y + size);
-      }
-      return;
-   }
-
-   /** Moves the square right by 2 pixels. */
-   method void moveRight() {
-      if ((x + size) < 510) {
-         do Screen.setColor(false);
-         do Screen.drawRectangle(x, y, x + 1, y + size);
-         let x = x + 2;
-         do Screen.setColor(true);
-         do Screen.drawRectangle((x + size) - 1, y, x + size, y + size);
-      }
-      return;
+      return a;
    }
 }

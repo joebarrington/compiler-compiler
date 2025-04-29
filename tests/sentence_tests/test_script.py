@@ -2,10 +2,10 @@ import os
 import sys
 import time
 from pathlib import Path
+from generated_parser.generated_parser import GeneratedParser
+
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from generated_parser.generated_parser import GeneratedParser
 
 ERROR_FILES = [
     "invalid_test"
@@ -74,8 +74,8 @@ def test_all_files(directory):
     
     parsing_times = []
     
-    test_files = [f for f in list(Path(directory).glob('**/*.txt')) 
-                 if not f.name.endswith('explanation.md')]
+    test_files = list(Path(directory).glob('**/*.txt'))
+
     
     print(f"Found {len(test_files)} test files to test")
     print("-" * 60)
@@ -105,9 +105,6 @@ def test_all_files(directory):
     
     print("\nTEST SUMMARY:")
     print(f"Total files tested: {total}")
-    print(f"Files that behaved as expected: {correct} ({correct/total*100:.1f}%)")
-    print(f"Files that did not behave as expected: {total - correct} ({(total-correct)/total*100:.1f}%)")
-    print("\nDETAILED RESULTS:")
     print(f"Files expected to pass and did: {results['expected_success_correct']}")
     print(f"Files expected to pass but failed: {results['expected_success_wrong']}")
     print(f"Files expected to fail and did: {results['expected_error_correct']}")
@@ -117,7 +114,6 @@ def test_all_files(directory):
         avg_parsing_time = sum(parsing_times) / len(parsing_times)
         max_parsing_time = max(parsing_times)
         min_parsing_time = min(parsing_times)
-        print("\nPERFORMANCE METRICS:")
         print(f"Average parsing time: {avg_parsing_time:.7f} seconds")
         print(f"Maximum parsing time: {max_parsing_time:.7f} seconds")
         print(f"Minimum parsing time: {min_parsing_time:.7f} seconds")
