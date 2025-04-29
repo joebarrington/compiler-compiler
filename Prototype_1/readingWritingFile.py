@@ -113,6 +113,7 @@ class ParserGenerator:
     def generate_rule_method(self, rule_name: str, rule: Rule) -> str:
         method_code = f"\n    def parse_{rule_name}(self):\n"
         method_code += "        start_pos = self.pos\n"
+        method_code += f"        print(self.pos, {rule_name}\n"
         method_code += "        self.skip_whitespace()\n\n"
         
         alternatives = []
@@ -191,6 +192,7 @@ class GeneratedParser:
             
     def match(self, terminal):
         self.skip_whitespace()
+        print(self.pos, terminal)
         if self.pos < self.length:
             current_text = self.text[self.pos:]
             if current_text.startswith(terminal):

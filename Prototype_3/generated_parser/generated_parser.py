@@ -2,8 +2,8 @@ from Lexer import StandardLexer, TokenType, Token
 
 class GeneratedParser:
     def __init__(self, text: str):
-        self.keywords = {'var', 'if', 'while', 'void', 'this', 'let', 'int', 'null', 'boolean', 'function', 'static', 'char', 'constructor', 'true', 'field', 'method', 'do', 'class', 'else', 'false', 'return'}
-        self.symbols = {'', '[', '*', '/', ']', '.', '(', '>', '&', '~', ')', '=', '{', '|', ';', '+', '<', ',', '-', '}'}
+        self.keywords = {'true', 'static', 'method', 'int', 'char', 'null', 'field', 'this', 'if', 'let', 'else', 'do', 'class', 'while', 'void', 'var', 'constructor', 'function', 'false', 'return', 'boolean'}
+        self.symbols = {'', '>', '}', ';', '+', '.', '~', ']', '=', '&', '{', '/', '-', '|', '*', '[', ',', '(', '<', ')'}
         self.lexer = StandardLexer(text, self.keywords)
         self.current_token = None
         self.next_token()
@@ -42,27 +42,24 @@ class GeneratedParser:
                 return True
             self.next_token()
         return False
+
     def next_token(self):
         self.current_token = self.lexer.get_next_token()
-        
+
     def match(self, expected_type, expected_value=None):
-        if self.current_token.type == expected_type:
-            if expected_value is None or self.current_token.value == expected_value:
-                token = self.current_token
-                self.next_token()
-                return True
+        if self.current_token.type == expected_type and (expected_value is None or self.current_token.value == expected_value):
+            self.next_token()
+            return True
         return False
-        
+
     def repeat_parse(self, parse_fn):
-        parsed_at_least_once = False
         while True:
             pos = self.lexer.pos
             if not parse_fn():
                 self.lexer.pos = pos
                 break
-            parsed_at_least_once = True
         return True
-        
+
     def parse(self):
         if not self.parse_classDeclar():
             self.error("valid classDeclar")
@@ -72,12 +69,13 @@ class GeneratedParser:
 
     def parse_identifier(self):
         return self.match(TokenType.IDENTIFIER)
-        
+
     def parse_integerConstant(self):
         return self.match(TokenType.INTEGER)
-        
+
     def parse_stringLiteral(self):
         return self.match(TokenType.STRING)
+
     def parse_classDeclar(self):
         pos_start = self.lexer.pos
         if self.match(TokenType.KEYWORD, "class") and self.parse_identifier() and self.match(TokenType.SYMBOL, "{") and self.repeat_parse(lambda: self.parse_memberDeclar()) and self.match(TokenType.SYMBOL, "}"):
@@ -94,7 +92,7 @@ class GeneratedParser:
 
     def parse_classVarDeclar(self):
         pos_start = self.lexer.pos
-        if (self.match(TokenType.KEYWORD, "static") or self.match(TokenType.KEYWORD, "field")) and self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
+        if (self.match(TokenType.KEYWORD, "static") or self.match(TokenType.KEYWORD, "field")) and self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: self.match(TokenType.SYMBOL, ",") and self.parse_identifier()) and self.match(TokenType.SYMBOL, ";"):
             return True
         self.lexer.pos = pos_start
         return False
@@ -115,7 +113,7 @@ class GeneratedParser:
 
     def parse_paramList(self):
         pos_start = self.lexer.pos
-        if (self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_type() and self.parse_identifier()))) or True:
+        if (self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: self.match(TokenType.SYMBOL, ",") and self.parse_type() and self.parse_identifier())) or True:
             return True
         self.lexer.pos = pos_start
         return False
@@ -136,21 +134,21 @@ class GeneratedParser:
 
     def parse_varDeclarStatement(self):
         pos_start = self.lexer.pos
-        if self.match(TokenType.KEYWORD, "var") and self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_identifier())) and self.match(TokenType.SYMBOL, ";"):
+        if self.match(TokenType.KEYWORD, "var") and self.parse_type() and self.parse_identifier() and self.repeat_parse(lambda: self.match(TokenType.SYMBOL, ",") and self.parse_identifier()) and self.match(TokenType.SYMBOL, ";"):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_letStatemnt(self):
         pos_start = self.lexer.pos
-        if self.match(TokenType.KEYWORD, "let") and self.parse_identifier() and ((self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]")) or True) and self.match(TokenType.SYMBOL, "=") and self.parse_expression() and self.match(TokenType.SYMBOL, ";"):
+        if self.match(TokenType.KEYWORD, "let") and self.parse_identifier() and (self.match(TokenType.SYMBOL, "[") and self.parse_expression() and self.match(TokenType.SYMBOL, "]") or True) and self.match(TokenType.SYMBOL, "=") and self.parse_expression() and self.match(TokenType.SYMBOL, ";"):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_ifStatement(self):
         pos_start = self.lexer.pos
-        if self.match(TokenType.KEYWORD, "if") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self.repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}") and ((self.match(TokenType.KEYWORD, "else") and self.match(TokenType.SYMBOL, "{") and self.repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}")) or True):
+        if self.match(TokenType.KEYWORD, "if") and self.match(TokenType.SYMBOL, "(") and self.parse_expression() and self.match(TokenType.SYMBOL, ")") and self.match(TokenType.SYMBOL, "{") and self.repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}") and (self.match(TokenType.KEYWORD, "else") and self.match(TokenType.SYMBOL, "{") and self.repeat_parse(lambda: self.parse_statement()) and self.match(TokenType.SYMBOL, "}") or True):
             return True
         self.lexer.pos = pos_start
         return False
@@ -171,14 +169,14 @@ class GeneratedParser:
 
     def parse_subroutineCall(self):
         pos_start = self.lexer.pos
-        if self.parse_identifier() and ((self.match(TokenType.SYMBOL, ".") and self.parse_identifier()) or True) and self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")"):
+        if self.parse_identifier() and (self.match(TokenType.SYMBOL, ".") and self.parse_identifier() or True) and self.match(TokenType.SYMBOL, "(") and self.parse_expressionList() and self.match(TokenType.SYMBOL, ")"):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_expressionList(self):
         pos_start = self.lexer.pos
-        if (self.parse_expression() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, ",") and self.parse_expression()))) or True:
+        if (self.parse_expression() and self.repeat_parse(lambda: self.match(TokenType.SYMBOL, ",") and self.parse_expression())) or True:
             return True
         self.lexer.pos = pos_start
         return False
@@ -192,28 +190,28 @@ class GeneratedParser:
 
     def parse_expression(self):
         pos_start = self.lexer.pos
-        if self.parse_relationalExpression() and self.repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "&") or self.match(TokenType.SYMBOL, "|")) and self.parse_relationalExpression())):
+        if self.parse_relationalExpression() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, "&") or self.match(TokenType.SYMBOL, "|")) and self.parse_relationalExpression()):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_relationalExpression(self):
         pos_start = self.lexer.pos
-        if self.parse_ArithmeticExpression() and self.repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "=") or self.match(TokenType.SYMBOL, ">") or self.match(TokenType.SYMBOL, "<")) and self.parse_ArithmeticExpression())):
+        if self.parse_ArithmeticExpression() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, "=") or self.match(TokenType.SYMBOL, ">") or self.match(TokenType.SYMBOL, "<")) and self.parse_ArithmeticExpression()):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_ArithmeticExpression(self):
         pos_start = self.lexer.pos
-        if self.parse_term() and self.repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "+") or self.match(TokenType.SYMBOL, "-")) and self.parse_term())):
+        if self.parse_term() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, "+") or self.match(TokenType.SYMBOL, "-")) and self.parse_term()):
             return True
         self.lexer.pos = pos_start
         return False
 
     def parse_term(self):
         pos_start = self.lexer.pos
-        if self.parse_factor() and self.repeat_parse(lambda: ((self.match(TokenType.SYMBOL, "*") or self.match(TokenType.SYMBOL, "/")) and self.parse_factor())):
+        if self.parse_factor() and self.repeat_parse(lambda: (self.match(TokenType.SYMBOL, "*") or self.match(TokenType.SYMBOL, "/")) and self.parse_factor()):
             return True
         self.lexer.pos = pos_start
         return False

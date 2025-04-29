@@ -72,54 +72,36 @@ class ParserGenerator:
                 operators.extend(self._extract_operators(item))
         return operators
 
-    def _generate_node_code(self, node) -> str:
+    def generate_node_code(self, node) -> str:
         if isinstance(node, Terminal):
             if node.value == "":
-                return 'True'
-            if 'special_tokens' in self.token_config:
-                for token_name, (token_type, parser_method) in self.token_config['special_tokens'].items():
-                    if node.value == token_name:
-                        return f'self.{parser_method}()'
-            if node.value.isalpha():
-                return f'self.match(TokenType.{self.token_config["keyword_type"]}, "{node.value}")'
-            else:
-                return f'self.match(TokenType.{self.token_config["symbol_type"]}, "{node.value}")'
-                
-        elif isinstance(node, NonTerminal):
-            return f'self.parse_{node.name}()'
-            
-        elif isinstance(node, Sequence):
-            parts = []
-            for item in node.items:
-                part = self._generate_node_code(item)
-                if isinstance(item, Alternative):
-                    part = f'({part})'
-                parts.append(part)
-            return ' and '.join(parts)
-            
-        elif isinstance(node, Alternative):
-            parts = []
-            for option in node.options:
-                part = self._generate_node_code(option)
-                if isinstance(option, Sequence):
-                    part = f'({part})'
-                parts.append(part)
-            return ' or '.join(parts)
-            
-        elif isinstance(node, Repetition):
-            inner = self._generate_node_code(node.item)
-            if isinstance(node.item, (Alternative, Sequence)):
-                inner = f'({inner})'
-            return f'self._repeat_parse(lambda: {inner})'
-            
-        elif isinstance(node, Optional):
-            inner = self._generate_node_code(node.item)
-            if isinstance(node.item, (Alternative, Sequence)):
-                inner = f'({inner})'
-            return f'({inner} or True)'
-            
-        else:
-            raise Exception(f'Unknown node type: {type(node)}')
+                return "True"
+            special = self.token_config.get('special_tokens', {})
+            if node.value in special:
+                return f"self.{special[node.value][1]}()"
+            type_key = "keyword_type" if node.value.isalpha() else "symbol_type"
+            return f'self.match(TokenType.{self.token_config[type_key]}, "{node.value}")'
+
+        if isinstance(node, NonTerminal):
+            return f"self.{self.token_config['special_tokens'].get(node.name, (None, f'parse_{node.name}'))[1]}()"
+
+        if isinstance(node, Sequence):
+            parts = [self.generate_node_code(item) for item in node.items]
+            return ' and '.join(f"({part})" if isinstance(item, Alternative) else part for item, part in zip(node.items, parts))
+
+        if isinstance(node, Alternative):
+            parts = [self.generate_node_code(opt) for opt in node.options]
+            return ' or '.join(f"({p})" if isinstance(opt, Sequence) else p for opt, p in zip(node.options, parts))
+
+        if isinstance(node, Repetition):
+            inner = self.generate_node_code(node.item)
+            return f'self.repeat_parse(lambda: {inner})'
+
+        if isinstance(node, Optional):
+            inner = self.generate_node_code(node.item)
+            return f"({inner} or True)"
+
+        raise Exception(f"Unknown node type: {type(node)}")
 
     def _generate_parser_header(self) -> str:
         return f'''from Lexer import StandardLexer, TokenType, Token
@@ -134,23 +116,7 @@ class GeneratedParser:
         self.next_token()
         self._memoization_cache = {{}}
         self.error_recovery_points = set()  # Store sync points for error recovery
-    
-    @staticmethod
-    def memoize(func):
-        """Decorator for memoizing parser methods"""
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            cache_key = (func.__name__, self.lexer.pos)
-            if cache_key in self._memoization_cache:
-                result, new_pos = self._memoization_cache[cache_key]
-                self.lexer.pos = new_pos
-                return result
-            
-            start_pos = self.lexer.pos
-            result = func(self, *args, **kwargs)
-            self._memoization_cache[cache_key] = (result, self.lexer.pos)
-            return result
-        return wrapper'''
+    '''
 
     def _generate_error_handling(self) -> str:
         return '''
@@ -237,7 +203,6 @@ class GeneratedParser:
 
         for rule in self.ast:
             method = f'''
-    @memoize
     def parse_{rule.name}(self):
         pos_start = self.lexer.pos
         if {self._generate_node_code(rule.definition)}:

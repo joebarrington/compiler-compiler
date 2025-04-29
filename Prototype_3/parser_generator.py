@@ -37,9 +37,10 @@ class ParserGenerator:
 
     # Preprocess the grammar to rename 'number' to 'integerConstant'
     def preprocess_grammar(self):
-        rule_map = {rule.name: rule for rule in self.ast}
-        number_rule = rule_map.get('number')
-        digit_rule = rule_map.get('digit')
+        rules = {rule.name: rule for rule in self.ast}
+
+        number_rule = rules.get('number')
+        digit_rule = rules.get('digit')
 
         if number_rule and digit_rule:
             if self._is_digit_sequence(number_rule.definition):
@@ -56,6 +57,7 @@ class ParserGenerator:
                     isinstance(items[1].item, NonTerminal) and 
                     items[1].item.name == 'digit'))
             )
+        
         return False
 
     def _rename_nonterminal(self, old_name: str, new_name: str):
@@ -73,10 +75,12 @@ class ParserGenerator:
                     replacement = traverse(child)
                     if replacement:
                         children[i] = replacement
+
             elif isinstance(node, (Repetition, Optional)):
                 replacement = traverse(node.item)
                 if replacement:
                     node.item = replacement
+
             return rename(node)
 
         for rule in self.ast:
@@ -96,6 +100,7 @@ class ParserGenerator:
                 else:
                     if not node.value.isdigit():
                         self.symbols.add(node.value)
+
             elif isinstance(node, (Sequence, Alternative)):
                 for child in node.items if isinstance(node, Sequence) else node.options:
                     visit(child)
@@ -119,64 +124,45 @@ class ParserGenerator:
         elif isinstance(node, Sequence):
             for item in node.items:
                 operators.extend(self.extract_operators(item))
+
         return operators
 
     #This is the main code that generates the parser code. It uses the AST generated from the grammar to create specialized functions.
     def generate_node_code(self, node) -> str:
         if isinstance(node, Terminal):
             if node.value == "":
-                return 'True'
-            if 'special_tokens' in self.token_config:
-                for token_name, (token_type, parser_method) in self.token_config['special_tokens'].items():
-                    if node.value == token_name:
-                        return f'self.{parser_method}()'
-            if node.value.isalpha():
-                return f'self.match(TokenType.{self.token_config["keyword_type"]}, "{node.value}")'
-            else:
-                return f'self.match(TokenType.{self.token_config["symbol_type"]}, "{node.value}")'
-                
-        elif isinstance(node, NonTerminal):
-            if node.name == 'integerConstant':
-                token_type, parser_method = self.token_config['special_tokens']['integerConstant']
-                return f'self.{parser_method}()'
-            return f'self.parse_{node.name}()'
-            
-        elif isinstance(node, Sequence):
-            parts = []
-            for item in node.items:
-                part = self.generate_node_code(item)
-                if isinstance(item, Alternative):
-                    part = f'({part})'
-                parts.append(part)
-            return ' and '.join(parts)
-            
-        elif isinstance(node, Alternative):
-            parts = []
-            for option in node.options:
-                part = self.generate_node_code(option)
-                if isinstance(option, Sequence):
-                    part = f'({part})'
-                parts.append(part)
-            return ' or '.join(parts)
-            
-        elif isinstance(node, Repetition):
+                return "True"
+            special = self.token_config.get('special_tokens', {})
+            if node.value in special:
+                return f"self.{special[node.value][1]}()"
+            type_key = "keyword_type" if node.value.isalpha() else "symbol_type"
+            return f'self.match(TokenType.{self.token_config[type_key]}, "{node.value}")'
+
+        if isinstance(node, NonTerminal):
+            return f"self.{self.token_config['special_tokens'].get(node.name, (None, f'parse_{node.name}'))[1]}()"
+
+        if isinstance(node, Sequence):
+            parts = [self.generate_node_code(item) for item in node.items]
+            return ' and '.join(f"({part})" if isinstance(item, Alternative) else part for item, part in zip(node.items, parts))
+
+        if isinstance(node, Alternative):
+            parts = [self.generate_node_code(opt) for opt in node.options]
+            return ' or '.join(f"({p})" if isinstance(opt, Sequence) else p for opt, p in zip(node.options, parts))
+
+        if isinstance(node, Repetition):
             inner = self.generate_node_code(node.item)
-            if isinstance(node.item, (Alternative, Sequence)):
-                inner = f'({inner})'
             return f'self.repeat_parse(lambda: {inner})'
-            
-        elif isinstance(node, Optional):
+
+        if isinstance(node, Optional):
             inner = self.generate_node_code(node.item)
-            if isinstance(node.item, (Alternative, Sequence)):
-                inner = f'({inner})'
-            return f'({inner} or True)'
-            
-        else:
-            raise Exception(f'Unknown node type: {type(node)}')
+            return f"({inner} or True)"
+
+        raise Exception(f"Unknown node type: {type(node)}")
+
 
     # This function generates the header for the parser class, including the initialization of keywords and symbols.
     def generate_parser_header(self) -> str:
-        return f'''from generated_parser.Lexer import StandardLexer, TokenType, Token
+        return f'''from Lexer import StandardLexer, TokenType, Token
 
 class GeneratedParser:
     def __init__(self, text: str):
@@ -227,43 +213,42 @@ class GeneratedParser:
 
     # This function generates the parser methods for matching and parsing tokens.
     def generate_parser_methods(self) -> str:
-        return '''
+        start_rule = self.ast[0].name
+        return f'''
+
     def next_token(self):
         self.current_token = self.lexer.get_next_token()
-        
+
     def match(self, expected_type, expected_value=None):
-        if self.current_token.type == expected_type:
-            if expected_value is None or self.current_token.value == expected_value:
-                token = self.current_token
-                self.next_token()
-                return True
+        if self.current_token.type == expected_type and (expected_value is None or self.current_token.value == expected_value):
+            self.next_token()
+            return True
         return False
-        
+
     def repeat_parse(self, parse_fn):
-        parsed_at_least_once = False
         while True:
             pos = self.lexer.pos
             if not parse_fn():
                 self.lexer.pos = pos
                 break
-            parsed_at_least_once = True
         return True
-        
+
     def parse(self):
-        if not self.parse_{0}():
-            self.error("valid {0}")
+        if not self.parse_{start_rule}():
+            self.error("valid {start_rule}")
         if self.current_token.type != TokenType.EOF:
             self.error("end of input")
         return True
 
     def parse_identifier(self):
         return self.match(TokenType.IDENTIFIER)
-        
+
     def parse_integerConstant(self):
         return self.match(TokenType.INTEGER)
-        
+
     def parse_stringLiteral(self):
-        return self.match(TokenType.STRING)'''.format(self.ast[0].name)
+        return self.match(TokenType.STRING)
+'''
 
     def generate_parser_code(self) -> str:
         parser_code = self.generate_parser_header()
@@ -365,7 +350,7 @@ def main():
     with open('generated_parser/Lexer.py', 'w') as f:
         f.write(lexer_code)
     final_time = time.time()
-    print(f"Parser generated in {final_time - start_time:.8f} seconds")
+    print(f"Parser generated  {final_time - start_time:.8f} seconds")
 
 if __name__ == "__main__":
     main()
