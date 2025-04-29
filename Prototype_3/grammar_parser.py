@@ -17,6 +17,8 @@ class TokenType(Enum):
     RBRACKET = auto()
     EOF = auto()
 
+
+#The data class decorator is used to create classes that are used to store data with less code. 
 @dataclass
 class Token:
     type: TokenType
@@ -57,6 +59,7 @@ class Rule(ASTNode):
     name: str
     definition: ASTNode
 
+#The grammar is transformed into a sequence of tokens 
 class GrammarLexer:
     def __init__(self, text: str):
         self.text = text
@@ -65,6 +68,7 @@ class GrammarLexer:
         self.col = 1
         self.current_char = self.text[0] if text else None
 
+    #Basic functions used for calling errors and moving through the grammar.
     def error(self):
         raise Exception(f'Invalid character {self.current_char} at line {self.line}, column {self.col}')
 
@@ -82,6 +86,7 @@ class GrammarLexer:
         while self.current_char and self.current_char.isspace():
             self.advance()
 
+    #If an identifier is found, it is returned as a token.
     def identifier(self) -> Token:
         result = ''
         start_col = self.col
@@ -92,6 +97,7 @@ class GrammarLexer:
             
         return Token(TokenType.IDENTIFIER, result, self.line, start_col)
 
+    #If a terminal is found, it is returned as a token.
     def terminal(self) -> Token:
         result = ''
         start_col = self.col
@@ -107,6 +113,7 @@ class GrammarLexer:
         else:
             raise Exception(f'Unterminated string at line {self.line}, column {start_col}')
 
+    #This function is used to get the next token ftom the grammar.
     def get_next_token(self) -> Token:
         while self.current_char:
             if self.current_char.isspace():
@@ -141,12 +148,15 @@ class GrammarLexer:
 
         return Token(TokenType.EOF, '', self.line, self.col)
 
+
+#Now that the grammar has been tokenized the parser can be used to identify the grammar constrcutcs
 class GrammarParser:
     def __init__(self, text: str):
         self.lexer = GrammarLexer(text)
         self.current_token = self.lexer.get_next_token()
         self.rules: List[Rule] = []
 
+    #basic functions used for calling errors and moving through the sequence of tokens
     def error(self, expected: str):
         raise Exception(
             f'Unexpected token {self.current_token.value} at line {self.current_token.line}, '
@@ -159,6 +169,7 @@ class GrammarParser:
         else:
             self.error(str(token_type))
 
+    #each grammar construct has its own function to identify it.
     def parse_grammar(self) -> List[Rule]:
         while self.current_token.type != TokenType.EOF:
             rule = self.parse_rule()
