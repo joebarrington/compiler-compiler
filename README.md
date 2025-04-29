@@ -1,0 +1,1 @@
+To test the program; navigate to the test folder, choose a language to test and navigate into that folder, then run python ./test_script.py and the test script will run all test files and produce an output.
