@@ -6,6 +6,7 @@ from generated_parser import GeneratedParser
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+#this is used to show which files are expected to fail.
 ERROR_FILES = [
     "UnbalancedParen", "InvalidOpSeq", "EmptyParen", "InvalidChar", "TrailingOp"
 ]
@@ -33,6 +34,7 @@ def test_parser(file_path, expect_error=False):
             print(f"SUCCESS: File {file_path} parsed as expected")
             return True, parsing_time
             
+    #Check for syntax errors and other exceptions, then get the time taken and return it
     except SyntaxError as e:
         if 'start_time' in locals():
             end_time = time.perf_counter()
@@ -58,6 +60,8 @@ def test_parser(file_path, expect_error=False):
         else:
             print(f"UNEXPECTED FAILURE: File {file_path} failed with error: {str(e)[:100]}...")
             return False, parsing_time
+        
+    
 
 def test_all_files(directory):
     results = {
@@ -68,7 +72,7 @@ def test_all_files(directory):
     }
     
     parsing_times = []
-    
+    # Get all text files in the test_files directory
     expr_files = list(Path(directory).glob('**/*.expr'))
     
     print(f"Found {len(expr_files)} expression files to test")
@@ -106,9 +110,9 @@ def test_all_files(directory):
         avg_parsing_time = sum(parsing_times) / len(parsing_times)
         max_parsing_time = max(parsing_times)
         min_parsing_time = min(parsing_times)
-        print(f"Average parsing time: {avg_parsing_time:.7f} seconds")
-        print(f"Maximum parsing time: {max_parsing_time:.7f} seconds")
-        print(f"Minimum parsing time: {min_parsing_time:.7f} seconds")
+        print(f"Average {avg_parsing_time:.7f} seconds")
+        print(f"Max {max_parsing_time:.7f} seconds")
+        print(f"Min {min_parsing_time:.7f} seconds")
     
     return results, parsing_times
 

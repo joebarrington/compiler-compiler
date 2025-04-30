@@ -251,7 +251,7 @@ def main():
     arithmetic_generator = ParserGenerator(arithmetic_grammar)
     arithmetic_parser_code = arithmetic_generator.generate_parser()
     
-    with open('arithmetic_parser.py', 'w') as f:
+    with open('expression_parser.py', 'w') as f:
         f.write(arithmetic_parser_code)
 
     print("Generating sentence parser...")
